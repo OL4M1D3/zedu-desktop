@@ -3,3 +3,5 @@ export 'rich_text_controller.dart';
 export 'mention_suggestion_list.dart';
 export 'attachment_preview_bar.dart';
 export 'toolbar_button.dart';
+export 'doodle_stroke.dart';
+export 'doodle_dialog.dart';

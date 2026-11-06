@@ -849,6 +849,27 @@ class DmMessageComposerState extends ConsumerState<DmMessageComposer> {
     await addFiles(picked);
   }
 
+  /// Attaches the drawn doodle as `Doodle.png` without sending it, so the user
+  /// can add a caption or remove it.
+  Future<void> _openDoodle() async {
+    final png = await showDoodleDialog(context);
+    if (png == null || !mounted) return;
+    // On desktop, XFile.fromData ignores `name` and reports an empty one, so
+    // the doodle is written to its own temp folder to keep `Doodle.png`.
+    XFile file;
+    try {
+      final dir = await Directory.systemTemp.createTemp('zedu_doodle_');
+      final path = '${dir.path}${Platform.pathSeparator}Doodle.png';
+      await File(path).writeAsBytes(png);
+      file = XFile(path, name: 'Doodle.png', mimeType: 'image/png');
+    } catch (_) {
+      file = XFile.fromData(png, name: 'Doodle.png', mimeType: 'image/png');
+    }
+    if (!mounted) return;
+    await addFiles([file]);
+    if (mounted) _focusNode.requestFocus();
+  }
+
   void _removeFile(int index) {
     setState(
       () => _pendingFiles = List<XFile>.of(_pendingFiles)..removeAt(index),
@@ -1127,6 +1148,12 @@ class DmMessageComposerState extends ConsumerState<DmMessageComposer> {
                         onTap: _pickFiles,
                         colors: colors,
                         isActive: _pendingFiles.isNotEmpty,
+                      ),
+                      ToolbarButton(
+                        icon: Icons.draw_outlined,
+                        tooltip: 'Draw a doodle',
+                        onTap: _openDoodle,
+                        colors: colors,
                       ),
                       const SizedBox(width: 2),
                       ToolbarButton(
