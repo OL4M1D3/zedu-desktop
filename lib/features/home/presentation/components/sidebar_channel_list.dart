@@ -63,10 +63,7 @@ class _SidebarChannelListState extends ConsumerState<SidebarChannelList> {
                   Expanded(
                     child: Text(
                       'Unable to load channels.',
-                      style: TextStyle(
-                        color: colors.error,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: colors.error, fontSize: 13),
                     ),
                   ),
                   TextButton(
