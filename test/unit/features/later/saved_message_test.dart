@@ -3,7 +3,7 @@ import 'package:zedu/features/later/domain/saved_message.dart';
 
 void main() {
   test('uses thread identity for saved top-level messages', () {
-    final message = SavedMessage.fromJson({
+    final message = LaterMessage.fromJson({
       'id': 'bookmark',
       'thread_id': 'thread',
       'channels_id': 'channel',
@@ -14,7 +14,7 @@ void main() {
     expect(message.preview, 'hello');
   });
   test('supports direct-message metadata and unavailable content', () {
-    final message = SavedMessage.fromJson({
+    final message = LaterMessage.fromJson({
       'id': 'm1',
       'channel_type': 'Direct Message',
     });

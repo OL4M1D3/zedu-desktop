@@ -31,7 +31,7 @@ class LaterBody extends ConsumerStatefulWidget {
 
 class _LaterBodyState extends ConsumerState<LaterBody> {
   final _pending = <String>{};
-  Future<void> _remove(SavedMessage item) async {
+  Future<void> _remove(LaterMessage item) async {
     final org = ref.read(workspaceProvider).selectedWorkspace?.id;
     if (org == null || !_pending.add(item.id)) return;
     setState(() {});
@@ -149,7 +149,7 @@ class _LaterBodyState extends ConsumerState<LaterBody> {
 
 class _SavedMessageDialog extends ConsumerStatefulWidget {
   const _SavedMessageDialog({required this.item, required this.orgId});
-  final SavedMessage item;
+  final LaterMessage item;
   final String orgId;
   @override
   ConsumerState<_SavedMessageDialog> createState() =>

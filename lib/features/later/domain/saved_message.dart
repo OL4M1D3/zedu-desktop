@@ -1,5 +1,5 @@
-class SavedMessage {
-  const SavedMessage({
+class LaterMessage {
+  const LaterMessage({
     required this.id,
     required this.channelId,
     required this.preview,
@@ -13,7 +13,7 @@ class SavedMessage {
   final String channelName;
   final String sender;
   final bool isDm;
-  factory SavedMessage.fromJson(Map<String, dynamic> json) => SavedMessage(
+  factory LaterMessage.fromJson(Map<String, dynamic> json) => LaterMessage(
     id: (json['thread_id'] ?? json['message_id'] ?? json['id'] ?? '')
         .toString(),
     channelId: (json['channels_id'] ?? json['channel_id'] ?? '').toString(),

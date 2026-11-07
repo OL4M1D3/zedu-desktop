@@ -79,7 +79,9 @@ class UserModel {
       isActive: json['is_active'] as bool,
       online: json['online'] as bool,
       organisation: OrganisationModel.fromJson(
-        (json['organisation'] is Map<String, dynamic> ? json['organisation'] as Map<String, dynamic> : <String, dynamic>{}),
+        (json['organisation'] is Map<String, dynamic>
+            ? json['organisation'] as Map<String, dynamic>
+            : <String, dynamic>{}),
       ),
       profileUpdated: json['profile_updated'] as bool,
       userId: json['user_id'] as String? ?? json['id'] as String,

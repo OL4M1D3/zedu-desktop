@@ -5,8 +5,8 @@ import 'package:zedu/features/features.dart';
 class LaterRepository {
   LaterRepository(this.api);
   final ApiBaseService api;
-  Future<List<SavedMessage>> load(String orgId) async {
-    final items = <String, SavedMessage>{};
+  Future<List<LaterMessage>> load(String orgId) async {
+    final items = <String, LaterMessage>{};
     for (var page = 1; page <= 100; page++) {
       final response = await api.get<Map<String, dynamic>>(
         path: '/organisations/$orgId/saved/message',
@@ -18,7 +18,7 @@ class LaterRepository {
       }
       var added = 0;
       for (final raw in data.whereType<Map<dynamic, dynamic>>()) {
-        final item = SavedMessage.fromJson(Map<String, dynamic>.from(raw));
+        final item = LaterMessage.fromJson(Map<String, dynamic>.from(raw));
         if (item.id.isEmpty) continue;
         if (!items.containsKey(item.id)) added++;
         items[item.id] = item;
@@ -56,7 +56,7 @@ class LaterRepository {
 
   /// Locate older messages using the existing paginated conversation endpoints.
   Future<Map<String, dynamic>?> locate(
-    SavedMessage item, {
+    LaterMessage item, {
     required bool isDm,
   }) async {
     final seen = <String>{};
@@ -101,7 +101,7 @@ class LaterRepository {
 final laterRepositoryProvider = Provider(
   (ref) => LaterRepository(locator<ApiBaseService>()),
 );
-final savedMessagesProvider = FutureProvider<List<SavedMessage>>((ref) {
+final savedMessagesProvider = FutureProvider<List<LaterMessage>>((ref) {
   final orgId = ref.watch(
     workspaceProvider.select((s) => s.selectedWorkspace?.id),
   );

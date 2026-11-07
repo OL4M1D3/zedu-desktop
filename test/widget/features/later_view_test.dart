@@ -20,7 +20,7 @@ void main() {
         overrides: [
           savedMessagesProvider.overrideWith(
             (ref) async => [
-              const SavedMessage(
+              const LaterMessage(
                 id: 't1',
                 channelId: 'c1',
                 preview: 'Review this',
