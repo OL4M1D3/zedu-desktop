@@ -132,6 +132,23 @@ class _AppSidebarRailState extends ConsumerState<AppSidebarRail> {
                     isActive: activeType == HomeSidebarType.buzz,
                     onTap: () => select(HomeSidebarType.buzz),
                   ),
+                  _RailNavItem(
+                    icon: Icons.apartment_outlined,
+                    label: 'Office',
+                    isActive: activeType == HomeSidebarType.office,
+                    onTap: () {
+                      if (OfficeView.isSupported) {
+                        select(HomeSidebarType.office);
+                        return;
+                      }
+                      // No embedded WebView here; the browser signs in to Office
+                      // the web way.
+                      launchUrl(
+                        Uri.parse(kOfficeUrl),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

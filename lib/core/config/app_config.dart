@@ -28,6 +28,14 @@ const String kProductionApiBaseUrl = 'https://api.zedu.chat/api/v1/';
 String defaultApiBaseUrl({required bool isRelease}) =>
     isRelease ? kProductionApiBaseUrl : kStagingApiBaseUrl;
 
+/// Where Office, the 3D office web app, is served. Desktop opens its
+/// `/auth/desktop` page, which signs in with this app's zedu session, so it
+/// must run against the same zedu-be as `API_BASE_URL`.
+///
+/// TODO: migrate to an `OFFICE_URL` env value read in
+/// [AppConfig.fromEnvironment] once desktop env values can be changed.
+const String kOfficeUrl = 'https://office.groups.zedu.chat';
+
 /// The website's Contact Sales page, opened from the Enterprise plan.
 const String kDefaultContactSalesUrl = 'https://zedu.chat/contact-sales';
 
