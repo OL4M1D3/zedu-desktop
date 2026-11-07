@@ -407,7 +407,7 @@ class _OlderMessagesFooter extends ConsumerWidget {
   }
 }
 
-class ChannelMessageTile extends StatelessWidget {
+class ChannelMessageTile extends ConsumerStatefulWidget {
   const ChannelMessageTile({
     super.key,
     required this.channelId,

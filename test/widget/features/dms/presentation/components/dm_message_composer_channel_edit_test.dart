@@ -84,8 +84,14 @@ void main() {
           () => dmRepository.editMessage(any(), content: any(named: 'content')),
         ).thenAnswer((_) async {});
         when(
-          () => channelRepository.fetchChannelMessages(any()),
-        ).thenAnswer((_) async => Success<List<ChannelMessage>>(history));
+          () => channelRepository.fetchChannelMessages(
+            any(),
+            page: any(named: 'page'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              Success(ChannelMessagePage(messages: history, hasMore: false)),
+        );
         when(
           () => channelRepository.editChannelMessage(
             channelId: any(named: 'channelId'),
@@ -179,7 +185,10 @@ void main() {
         );
         // The channel's messages are loaded again, so the edit shows.
         verify(
-          () => channelRepository.fetchChannelMessages('channel-1'),
+          () => channelRepository.fetchChannelMessages(
+            'channel-1',
+            page: any(named: 'page'),
+          ),
         ).called(greaterThanOrEqualTo(2));
         expect(container.read(channelHistoryProvider('channel-1')), isNotNull);
       });
@@ -187,8 +196,15 @@ void main() {
       testWidgets('Up does nothing when I have no message in the channel', (
         tester,
       ) async {
-        when(() => channelRepository.fetchChannelMessages(any())).thenAnswer(
-          (_) async => Success<List<ChannelMessage>>([history.first]),
+        when(
+          () => channelRepository.fetchChannelMessages(
+            any(),
+            page: any(named: 'page'),
+          ),
+        ).thenAnswer(
+          (_) async => Success(
+            ChannelMessagePage(messages: [history.first], hasMore: false),
+          ),
         );
         await pump(tester);
         await tester.tap(find.byType(TextField));

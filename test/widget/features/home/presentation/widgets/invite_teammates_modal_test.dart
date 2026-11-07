@@ -60,9 +60,6 @@ class PartlyFailingUserProfileNotifier extends UserProfileNotifier {
   UserProfileState build() => const UserProfileState();
 
   @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
-
-  @override
   Future<void> inviteMember({
     required String email,
     required String role,

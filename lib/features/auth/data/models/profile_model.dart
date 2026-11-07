@@ -184,7 +184,6 @@ class ProfileModel {
     }
     return null;
   }
-  }
 
   /// Accepts ISO-8601 strings and epoch-seconds strings.
   static DateTime _parseDate(Object? raw) {

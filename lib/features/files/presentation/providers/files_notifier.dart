@@ -38,7 +38,12 @@ class FilesNotifier extends Notifier<FilesState> {
 
   /// Shows [view] while keeping the open folder, so uploads stay visible.
   void switchViewKeepingFolder(FilesScope view) {
-    state = _with(view: view, folderPath: state.folderPath, page: 1, folderPage: 1);
+    state = _with(
+      view: view,
+      folderPath: state.folderPath,
+      page: 1,
+      folderPage: 1,
+    );
   }
 
   /// Opens [folder] inside the current one and shows its files.

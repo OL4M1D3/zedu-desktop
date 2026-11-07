@@ -5,28 +5,6 @@ import 'package:zedu/features/features.dart';
 
 class MockChannelRepository extends Mock implements ChannelRepository {}
 
-class _FakeAuthNotifier extends AuthNotifier {
-  @override
-  AuthState build() => AuthState(
-    status: AuthStatus.authenticated,
-    user: User(
-      id: 'user-1',
-      firstName: 'Test',
-      lastName: 'User',
-      email: 'test@example.com',
-      phone: '',
-      username: 'testuser',
-      isVerified: true,
-      isOnboarded: true,
-      createdAt: DateTime(2026),
-      currentOrg: 'org-1',
-      currentOrganisationSlug: 'test-org',
-      avatarUrl: '',
-      defaultAvatarUrl: '',
-    ),
-  );
-}
-
 class FakeChatHistoryNotifier extends ChangeNotifier
     implements ChatHistoryNotifier {
   FakeChatHistoryNotifier(this.channelId);
@@ -84,15 +62,13 @@ void main() {
     int unreadCount = 0,
   ]) async {
     if (legacy != null) {
-      stubPage(
-        1,
-        switch (legacy) {
-          Success<List<ChannelMessage>>(:final value) =>
-            Success(ChannelMessagePage(messages: value, hasMore: false)),
-          Failure<List<ChannelMessage>>(:final error) =>
-            Failure<ChannelMessagePage>(error),
-        },
-      );
+      stubPage(1, switch (legacy) {
+        Success<List<ChannelMessage>>(:final value) => Success(
+          ChannelMessagePage(messages: value, hasMore: false),
+        ),
+        Failure<List<ChannelMessage>>(:final error) =>
+          Failure<ChannelMessagePage>(error),
+      });
     }
     await tester.pumpWidget(
       ProviderScope(

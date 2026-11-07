@@ -2,7 +2,6 @@ import 'dart:io' show exit;
 
 import 'package:zedu/core/core.dart';
 import 'package:zedu/app/app.dart';
-import 'package:zedu/core/window/global_hotkey.dart';
 import 'package:zedu/core/window/window_startup.dart';
 
 Future<void> main() async {
@@ -34,9 +33,6 @@ Future<void> main() async {
     window: windowManager,
     storage: locator<SecureStorageService>(),
   ).restore();
-  // startGlobalHotkey() clears every hotkey registration first, so it has to
-  // run before WindowHotkeyController registers its shortcut.
-  await startGlobalHotkey();
   await locator<WindowHotkeyController>().start();
   showWindowWhenReady(windowManager);
   AppRouter.startLocation = await AppRouter.resolveStartLocation(

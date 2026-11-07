@@ -23,7 +23,9 @@ class HotkeyBinding {
             : HotKeyModifier.control,
         HotKeyModifier.shift,
       },
-      key: LogicalKeyboardKey.keyZ,
+      // Not Shift+Z: as a system-wide shortcut it would take Redo away
+      // from every other app.
+      key: LogicalKeyboardKey.space,
     );
   }
 
@@ -45,7 +47,7 @@ class HotkeyBinding {
     if (modifiers.contains(HotKeyModifier.shift)) 'Shift',
     if (modifiers.contains(HotKeyModifier.meta))
       defaultTargetPlatform == TargetPlatform.macOS ? 'Cmd' : 'Win',
-    key.keyLabel,
+    key == LogicalKeyboardKey.space ? 'Space' : key.keyLabel,
   ].join(' + ');
 
   String toJson() => jsonEncode({

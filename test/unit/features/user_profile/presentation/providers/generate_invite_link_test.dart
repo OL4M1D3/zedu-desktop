@@ -56,7 +56,9 @@ void main() {
       when(
         () => repo.getNotificationPreferences(orgId: any(named: 'orgId')),
       ).thenAnswer((_) => failed());
-      when(() => repo.getSecuritySessions()).thenAnswer((_) => failed());
+      when(
+        () => repo.getSecuritySessions(userId: any(named: 'userId')),
+      ).thenAnswer((_) => failed());
       when(
         () => repo.getOrganization(orgId: any(named: 'orgId')),
       ).thenAnswer((_) => failed());

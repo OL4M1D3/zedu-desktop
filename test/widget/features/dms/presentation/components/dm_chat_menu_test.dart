@@ -96,7 +96,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('View profile'), findsOneWidget);
-    expect(find.text('Export conversation'), findsOneWidget);
     expect(find.text('Delete conversation'), findsOneWidget);
     final menuSurface = tester
         .widgetList<Material>(find.byType(Material))

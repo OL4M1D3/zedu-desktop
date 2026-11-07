@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:audioplayers/audioplayers.dart'
     show AudioPlayer, DeviceFileSource;
@@ -472,7 +473,10 @@ class DmMessageComposerState extends ConsumerState<DmMessageComposer> {
   /// messages, which carry the thread id the edit route needs.
   ChannelMessage? _lastOwnChannelMessage() {
     final me = ref.read(chatHistoryProvider(widget.channelId)).currentUserId;
-    final messages = ref.read(channelHistoryProvider(widget.channelId)).value;
+    final messages = ref
+        .read(channelHistoryProvider(widget.channelId))
+        .value
+        ?.messages;
     if (messages == null) return null;
     for (final message in messages) {
       if (message.userId == me &&

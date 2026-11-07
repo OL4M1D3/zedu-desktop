@@ -23,6 +23,4 @@ export 'presentation/widgets/create_channel_modal.dart';
 export 'presentation/widgets/edit_channel_modal.dart';
 export 'presentation/views/channel_directory_view.dart';
 export 'data/models/webhook_model.dart';
-export 'data/repositories/webhook_repository.dart';
-export 'presentation/views/webhook_management_section.dart';
 export 'data/models/reaction_model.dart';

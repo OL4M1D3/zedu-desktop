@@ -184,13 +184,6 @@ class _SettingsNavigationState extends State<_SettingsNavigation> {
                           onSectionSelected(UserProfileSection.notifications),
                     ),
                     _NavigationTile(
-                      icon: Icons.keyboard_outlined,
-                      label: 'Keyboard shortcuts',
-                      selected: selectedSection == UserProfileSection.shortcuts,
-                      onTap: () =>
-                          onSectionSelected(UserProfileSection.shortcuts),
-                    ),
-                    _NavigationTile(
                       icon: Icons.desktop_windows_outlined,
                       label: 'Desktop',
                       selected: selectedSection == UserProfileSection.desktop,

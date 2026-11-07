@@ -64,9 +64,6 @@ Widget buildSwitcherUnderTest({WorkspaceNotifier Function()? notifier}) {
 class FakeInviteUserProfileNotifier extends UserProfileNotifier {
   @override
   UserProfileState build() => const UserProfileState();
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
 }
 
 class FakeInviteActiveChatNotifier extends ActiveChatNotifier {

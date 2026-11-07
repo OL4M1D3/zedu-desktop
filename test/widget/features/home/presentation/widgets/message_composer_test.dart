@@ -28,6 +28,8 @@ void _fakeFilePicker(WidgetTester tester, List<String> paths) {
   );
 }
 
+class _MockChatHistory extends Mock implements ChatHistoryNotifier {}
+
 class _FakeProfileNotifier extends UserProfileNotifier {
   _FakeProfileNotifier(this.initial);
 
@@ -160,11 +162,16 @@ void main() {
       }
     });
 
-    testWidgets('preserves picked file paths in onSend and onSendMedia', (
-      tester,
-    ) async {
+    testWidgets('sends picked files as media with the message', (tester) async {
       String? sentMessage;
-      List<XFile>? sentMedia;
+      final history = _MockChatHistory();
+      when(
+        () => history.sendMessage(
+          any(),
+          media: any(named: 'media'),
+          isChannel: any(named: 'isChannel'),
+        ),
+      ).thenAnswer((_) async {});
 
       _fakeFilePicker(tester, [reportPath]);
 
@@ -176,6 +183,7 @@ void main() {
                 UserProfileState(teamMembers: const [_ada]),
               ),
             ),
+            chatHistoryProvider('general').overrideWith((ref) => history),
           ],
           child: buildTestMaterialApp(
             Scaffold(
@@ -185,7 +193,6 @@ void main() {
                   id: 'general',
                 ),
                 onSend: (msg) => sentMessage = msg,
-                onSendMedia: (text, media) => sentMedia = media,
               ),
             ),
           ),
@@ -210,11 +217,19 @@ void main() {
       await tester.tap(find.byTooltip('Send message'));
       await tester.pumpAndSettle();
 
-      expect(sentMessage, 'Check this document\n[Attachment: $reportPath]');
-      expect(sentMedia, isNotNull);
-      expect(sentMedia!.length, 1);
-      expect(sentMedia!.first.path, reportPath);
-      expect(sentMedia!.first.name, contains('specification.pdf'));
+      expect(sentMessage, 'Check this document');
+      final sentMedia =
+          verify(
+                () => history.sendMessage(
+                  'Check this document',
+                  media: captureAny(named: 'media'),
+                  isChannel: true,
+                ),
+              ).captured.single
+              as List<XFile>;
+      expect(sentMedia, hasLength(1));
+      expect(sentMedia.first.path, reportPath);
+      expect(sentMedia.first.name, contains('specification.pdf'));
 
       // Chips are cleared after send
       expect(find.text('specification.pdf'), findsNothing);

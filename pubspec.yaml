@@ -35,7 +35,6 @@ dependencies:
   window_manager: ^0.5.1
   hotkey_manager: ^0.2.3
   package_info_plus: ^9.0.1
-  pdf: 3.11.3
 
 dev_dependencies:
   flutter_test:

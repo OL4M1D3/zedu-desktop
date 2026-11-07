@@ -678,10 +678,10 @@ void _disposalTests() {
         disposeOnce();
 
         editRequest.completeError(Exception('network error'));
-        // Staging's saveEdit reports the failure to its caller; the guarded
+        // saveEdit reports the failure to its caller as false; the guarded
         // continuation must not notify anyone even though the notifier is
         // disposed.
-        await edit.catchError((_) {});
+        expect(await edit, isFalse);
         await pumpEventQueue();
 
         // Without the disposal guard, the late continuation would call
