@@ -15,6 +15,12 @@ void main() {
       expect(model.token, isEmpty);
     });
 
+    test('falls back to an empty token when the field is null', () {
+      final model = ConnectionTokenModel.fromJson({'token': null});
+
+      expect(model.token, isEmpty);
+    });
+
     test('round-trips through toJson', () {
       const original = ConnectionTokenModel(token: 'abc.def.ghi');
 

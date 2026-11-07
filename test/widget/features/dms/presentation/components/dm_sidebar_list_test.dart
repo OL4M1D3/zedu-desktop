@@ -18,7 +18,9 @@ class _FakeSecureStorageService extends Fake implements SecureStorageService {
 
 class _FakeWorkspaceNotifier extends WorkspaceNotifier {
   @override
-  WorkspaceState build() => const WorkspaceState();
+  WorkspaceState build() => const WorkspaceState(
+    selectedWorkspace: Workspace(id: 'org-1', name: 'Org 1', avatar: ''),
+  );
 }
 
 class _FakeDmListNotifier extends DmListNotifier {
@@ -28,6 +30,27 @@ class _FakeDmListNotifier extends DmListNotifier {
 
   @override
   Future<List<DmConversation>> build() async => _conversations;
+}
+
+class _FakeDmRepository extends Fake implements DmRepository {
+  _FakeDmRepository(this.conversations);
+  final List<DmConversation> conversations;
+
+  @override
+  Future<List<DmConversation>> getConversations({
+    required String orgId,
+    int page = 1,
+    bool recentDm = false,
+    String? search,
+  }) async {
+    if (search != null && search.isNotEmpty) {
+      final q = search.toLowerCase();
+      return conversations
+          .where((c) => c.displayName.toLowerCase().contains(q))
+          .toList();
+    }
+    return conversations;
+  }
 }
 
 DmConversation _conversation(String channelId, String username) {
@@ -57,7 +80,9 @@ Future<void> _pumpSidebar(
   WidgetTester tester,
   List<DmConversation> conversations, {
   DmListNotifier Function()? notifier,
+  DmRepository? repository,
 }) async {
+  final repo = repository ?? _FakeDmRepository(conversations);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -72,6 +97,7 @@ Future<void> _pumpSidebar(
         dmListProvider.overrideWith(
           notifier ?? () => _FakeDmListNotifier(conversations),
         ),
+        dmRepositoryProvider.overrideWithValue(repo),
       ],
       child: buildTestMaterialApp(const Scaffold(body: DmSidebarList())),
     ),
@@ -185,5 +211,38 @@ void main() {
 
     expect(find.text("Couldn't load more chats"), findsNothing);
     expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('searches server for conversation beyond the first page', (
+    tester,
+  ) async {
+    final page1 = [
+      _conversation('channel-1', 'Ada Okafor'),
+      _conversation('channel-2', 'Bola Ige'),
+    ];
+    final allServerConversations = [
+      ...page1,
+      _conversation('channel-25', 'Zainab Danjuma'),
+    ];
+    await _pumpSidebar(
+      tester,
+      page1,
+      repository: _FakeDmRepository(allServerConversations),
+    );
+
+    expect(find.text('Zainab Danjuma'), findsNothing);
+
+    await tester.enterText(search, 'zainab');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zainab Danjuma'), findsOneWidget);
+    expect(find.byType(DmListTile), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zainab Danjuma'), findsNothing);
+    expect(find.text('Ada Okafor'), findsOneWidget);
+    expect(find.text('Bola Ige'), findsOneWidget);
   });
 }

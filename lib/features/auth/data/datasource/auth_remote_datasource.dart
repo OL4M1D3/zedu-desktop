@@ -187,7 +187,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       AppLogger.d('POST /auth/password-reset/verify', tag: _tag);
       await _apiBaseService.post<dynamic>(
         path: '/auth/password-reset/verify',
-        data: {'token': token, 'new_password': newPassword},
+        data: {'email': email, 'token': token, 'new_password': newPassword},
       );
     } on ApiFailure {
       rethrow;

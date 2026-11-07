@@ -48,8 +48,10 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
   }
 
   @override
-  Future<Result<List<SecuritySession>>> getSecuritySessions() {
-    return _guard(_remote.getSecuritySessions);
+  Future<Result<List<SecuritySession>>> getSecuritySessions({
+    required String userId,
+  }) {
+    return _guard(() => _remote.getSecuritySessions(userId: userId));
   }
 
   @override
@@ -122,8 +124,8 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
   }
 
   @override
-  Future<Result<List<RolePermission>>> getRolesAndPermissions() {
-    return _guard(_remote.getRolesAndPermissions);
+  Future<Result<List<RolePermission>>> getRolesAndPermissions({String? orgId}) {
+    return _guard(() => _remote.getRolesAndPermissions(orgId: orgId));
   }
 
   @override

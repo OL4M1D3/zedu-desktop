@@ -13,19 +13,26 @@ const double _railGap = 8;
 /// Horizontal padding shared by the card's rows and menu items.
 const double _cardHorizontalPadding = 12;
 
-class UserMenuDialog extends ConsumerWidget {
+class UserMenuDialog extends ConsumerStatefulWidget {
   const UserMenuDialog({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserMenuDialog> createState() => _UserMenuDialogState();
+}
+
+class _UserMenuDialogState extends ConsumerState<UserMenuDialog> {
+  bool _showPauseOptions = false;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = context.colors;
     final authUser = ref.watch(authNotifierProvider).user;
     final balance = ref.watch(orgCreditBalanceProvider);
+    final settings = ref.watch(notificationSettingsProvider);
     final displayName = authUser?.fullname ?? 'AnonymousUser';
     final status = authUser?.status ?? UserStatus.empty;
-    final orgSlug = authUser?.currentOrganisationSlug ?? '';
-    final signOutTarget = orgSlug.isEmpty ? 'Zedu' : orgSlug;
     final isOnline = status.online;
+    final pausedUntil = settings.isDndActive ? settings.dndUntil : null;
 
     // Sit the card just outside the rail and keep it inside the window: it
     // grows to [_maxCardWidth] and shrinks on windows too narrow for that.
@@ -129,7 +136,7 @@ class UserMenuDialog extends ConsumerWidget {
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
-                                  '$balance AI credits',
+                                  aiCreditsLabel(balance),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -256,16 +263,34 @@ class UserMenuDialog extends ConsumerWidget {
               ),
 
               // ── Pause notifications ────────────────────────────────────────
-              _MenuItemButton(
-                icon: Icons.notifications_off_outlined,
-                label: 'Pause notifications',
-                onTap: () {
-                  Navigator.pop(context);
-                  ref
-                      .read(notificationSettingsProvider.notifier)
-                      .setDndMode(const Duration(hours: 1));
-                },
-              ),
+              if (pausedUntil != null)
+                _MenuItemButton(
+                  icon: Icons.notifications_active_outlined,
+                  label: 'Resume notifications',
+                  subtitle: _pausedUntilLabel(context, pausedUntil),
+                  onTap: () {
+                    final notifier = ref.read(
+                      notificationSettingsProvider.notifier,
+                    );
+                    Navigator.pop(context);
+                    notifier.clearDndMode();
+                  },
+                )
+              else ...[
+                _MenuItemButton(
+                  icon: Icons.notifications_off_outlined,
+                  label: 'Pause notifications',
+                  trailing: Icon(
+                    _showPauseOptions ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: colors.textHint,
+                  ),
+                  onTap: () =>
+                      setState(() => _showPauseOptions = !_showPauseOptions),
+                ),
+                if (_showPauseOptions)
+                  _PauseDurationPicker(onSelected: _pauseFor),
+              ],
               const SizedBox(height: 8),
               Divider(height: 0, color: colors.divider),
               const SizedBox(height: 8),
@@ -277,6 +302,9 @@ class UserMenuDialog extends ConsumerWidget {
                 onTap: () {
                   Navigator.pop(context);
                   ref.read(personalProfilePanelProvider.notifier).state = true;
+                  if (context.mounted) {
+                    context.go(AppRouter.home);
+                  }
                 },
               ),
               _MenuItemButton(
@@ -301,9 +329,11 @@ class UserMenuDialog extends ConsumerWidget {
               const SizedBox(height: 8),
 
               // ── Sign out ───────────────────────────────────────────────────
+              // Ends the whole Zedu session, not just this workspace, so the
+              // label names Zedu rather than the current organisation.
               _MenuItemButton(
                 icon: Icons.logout_rounded,
-                label: 'Sign out of $signOutTarget',
+                label: 'Sign out of Zedu',
                 isError: true,
                 onTap: () async {
                   Navigator.pop(context);
@@ -318,6 +348,12 @@ class UserMenuDialog extends ConsumerWidget {
       ),
     );
   }
+
+  void _pauseFor(Duration duration) {
+    final notifier = ref.read(notificationSettingsProvider.notifier);
+    Navigator.pop(context);
+    notifier.setDndMode(duration);
+  }
 }
 
 // ── Internal helper widget ─────────────────────────────────────────────────────
@@ -325,6 +361,8 @@ class UserMenuDialog extends ConsumerWidget {
 class _MenuItemButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
+  final Widget? trailing;
   final VoidCallback onTap;
   final Color? iconColor;
   final bool isHighlight;
@@ -334,6 +372,8 @@ class _MenuItemButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.subtitle,
+    this.trailing,
     this.iconColor,
     this.isHighlight = false,
     this.isError = false,
@@ -360,17 +400,106 @@ class _MenuItemButton extends StatelessWidget {
             Icon(icon, size: 20, color: resolvedIconColor),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: itemColor,
-                  fontSize: 13,
-                  fontWeight: isHighlight || isError
-                      ? FontWeight.w500
-                      : FontWeight.normal,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: itemColor,
+                      fontSize: 13,
+                      fontWeight: isHighlight || isError
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(color: colors.textHint, fontSize: 11),
+                    ),
+                  ],
+                ],
               ),
             ),
+            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const _pauseChoices = <({String label, Duration? duration})>[
+  (label: '1 hour', duration: Duration(hours: 1)),
+  (label: '30 minutes', duration: Duration(minutes: 30)),
+  (label: '2 hours', duration: Duration(hours: 2)),
+  (label: 'Until tomorrow morning', duration: null),
+];
+
+class _PauseDurationPicker extends StatelessWidget {
+  const _PauseDurationPicker({required this.onSelected});
+
+  final ValueChanged<Duration> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        _cardHorizontalPadding + 32,
+        2,
+        _cardHorizontalPadding,
+        4,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.primaryBg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < _pauseChoices.length; i++) ...[
+              if (i > 0) Divider(height: 0, color: colors.divider),
+              _PauseDurationOption(
+                label: _pauseChoices[i].label,
+                onTap: () => onSelected(
+                  _pauseChoices[i].duration ?? _durationUntilTomorrowMorning(),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseDurationOption extends StatelessWidget {
+  const _PauseDurationOption({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return InkWell(
+      mouseCursor: SystemMouseCursors.click,
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: colors.textHint),
           ],
         ),
       ),
@@ -417,7 +546,26 @@ String _initialsFor(String name) {
       .where((part) => part.isNotEmpty)
       .take(2);
   if (parts.isEmpty) return '?';
-  return parts
-      .map((part) => String.fromCharCode(part.runes.first).toUpperCase())
-      .join();
+  return parts.map((part) => part.characters.first.toUpperCase()).join();
+}
+
+Duration _durationUntilTomorrowMorning() {
+  final now = DateTime.now();
+  final tomorrow = DateTime(now.year, now.month, now.day + 1, 8);
+  return tomorrow.difference(now);
+}
+
+String _pausedUntilLabel(BuildContext context, DateTime until) {
+  final localizations = MaterialLocalizations.of(context);
+  final time = localizations.formatTimeOfDay(
+    TimeOfDay.fromDateTime(until),
+    alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+  );
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(until.year, until.month, until.day);
+  if (day == today) return 'Paused until $time';
+  final tomorrow = DateTime(now.year, now.month, now.day + 1);
+  if (day == tomorrow) return 'Paused until tomorrow at $time';
+  return 'Paused until ${localizations.formatShortDate(until)} at $time';
 }

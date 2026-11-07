@@ -115,5 +115,34 @@ void main() {
         AuthStatus.unauthenticated,
       );
     });
+    test(
+      "logout completes even if draft deletion encounters an error",
+      () async {
+        final storage = MockSecureStorageService();
+        when(() => storage.readAll()).thenThrow(Exception('disk error'));
+        when(() => storage.deleteAccessToken()).thenAnswer((_) async {});
+        final repo = MockAuthRepository();
+        locator.registerSingleton<SecureStorageService>(storage);
+        locator.registerSingleton<AuthInterceptor>(MockAuthInterceptor());
+        when(
+          () => repo.getCurrentUser(),
+        ).thenAnswer((_) async => Success(_user('u1')));
+        final container = ProviderContainer(
+          overrides: [authRepositoryProvider.overrideWithValue(repo)],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(authNotifierProvider.notifier);
+        await pumpEventQueue();
+        expect(container.read(authNotifierProvider).user?.id, 'u1');
+
+        await notifier.logout();
+
+        expect(
+          container.read(authNotifierProvider).status,
+          AuthStatus.unauthenticated,
+        );
+      },
+    );
   });
 }

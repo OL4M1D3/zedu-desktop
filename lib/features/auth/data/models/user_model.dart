@@ -1,3 +1,4 @@
+import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 class UserModel {
@@ -58,14 +59,14 @@ class UserModel {
       username: json['username'] as String? ?? '',
       isVerified: json['is_verified'] as bool,
       isOnboarded: json['is_onboarded'] as bool,
-      createdAt: _parseDate(json['created_at']),
-      updatedAt: _parseDate(json['updated_at']),
+      createdAt: parseApiTimestamp(json['created_at'], field: 'created_at'),
+      updatedAt: parseApiTimestamp(json['updated_at'], field: 'updated_at'),
       avatarUrl: json['avatar_url'] as String? ?? '',
       currentOrg: json['current_org'] as String? ?? '',
       currentOrganisationSlug:
           json['current_organisation_slug'] as String? ?? '',
       defaultAvatarUrl: json['default_avatar_url'] as String? ?? '',
-      expiresIn: _parseDate(json['expires_in']),
+      expiresIn: parseApiTimestamp(json['expires_in'], field: 'expires_in'),
       isActive: json['is_active'] as bool,
       online: json['online'] as bool,
       organisation: OrganisationModel.fromJson(
@@ -74,22 +75,6 @@ class UserModel {
       profileUpdated: json['profile_updated'] as bool,
       userId: json['user_id'] as String? ?? json['id'] as String,
     );
-  }
-
-  /// Accepts epoch seconds (as a number or a string) and ISO-8601 strings.
-  static DateTime _parseDate(Object? raw) {
-    if (raw is num) {
-      return DateTime.fromMillisecondsSinceEpoch(raw.toInt() * 1000);
-    }
-    if (raw is String) {
-      final seconds = int.tryParse(raw);
-      if (seconds != null) {
-        return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
-      }
-      final iso = DateTime.tryParse(raw);
-      if (iso != null) return iso;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   Map<String, dynamic> toJson() => {

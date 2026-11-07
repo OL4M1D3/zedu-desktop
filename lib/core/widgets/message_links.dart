@@ -97,6 +97,37 @@ class MessageLinks {
     return TextSpan(style: style, children: children);
   }
 
+  /// Builds a tappable span for a named Markdown link `[label](url)`. The
+  /// label is shown with the link styling, and tapping opens [url] when
+  /// [messageLinkUri] allows it. [children] replaces the label text, so
+  /// formatted labels keep their formatting inside the link.
+  TextSpan link(
+    String label,
+    String url,
+    TextStyle style, [
+    List<InlineSpan> children = const [],
+  ]) {
+    final effective = style.copyWith(
+      decoration: TextDecoration.combine([
+        ?style.decoration,
+        TextDecoration.underline,
+      ]),
+    );
+    final content = children.isEmpty
+        ? <InlineSpan>[TextSpan(text: label)]
+        : children;
+    final uri = messageLinkUri(url);
+    if (uri == null) return TextSpan(style: effective, children: content);
+    return TextSpan(
+      style: effective,
+      children: content,
+      recognizer: _recognizers.putIfAbsent(
+        url,
+        () => TapGestureRecognizer()..onTap = () => openMessageLink(url),
+      ),
+    );
+  }
+
   void _dispose() {
     for (final recognizer in _recognizers.values) {
       recognizer.dispose();

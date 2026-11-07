@@ -37,6 +37,9 @@ void main() {
 
     await tester.pumpWidget(_composer());
     await tester.pump();
+    // The doodle button sits in the More actions tray with Attach file.
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pump();
     await tester.tap(find.byTooltip('Draw a doodle'));
     await tester.pumpAndSettle();
   }

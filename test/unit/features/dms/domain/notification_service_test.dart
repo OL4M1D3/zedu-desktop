@@ -25,6 +25,7 @@ void main() {
         final router = createTestRouter(initialLocation: '/settings');
         final container = ProviderContainer(
           overrides: [
+            currentOrgIdProvider.overrideWithValue('org-test'),
             dmListProvider.overrideWith(
               () => _FakeDmListNotifier([
                 DmConversation(
@@ -91,6 +92,7 @@ void main() {
         final router = createTestRouter(initialLocation: '/settings');
         final container = ProviderContainer(
           overrides: [
+            currentOrgIdProvider.overrideWithValue('org-test'),
             dmListProvider.overrideWith(() => _FakeDmListNotifier([])),
             notificationServiceProvider.overrideWith(
               (ref) => NotificationService(
@@ -143,6 +145,7 @@ void main() {
         final router = createTestRouter(initialLocation: AppRouter.home);
         final container = ProviderContainer(
           overrides: [
+            currentOrgIdProvider.overrideWithValue('org-test'),
             dmListProvider.overrideWith(() => _FakeDmListNotifier([])),
             notificationServiceProvider.overrideWith(
               (ref) => NotificationService(

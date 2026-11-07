@@ -108,7 +108,7 @@ void main() {
         final sent =
             verify(() => repository.updateAccount(captureAny())).captured.single
                 as ProfileAccount;
-        expect(sent.name, '');
+        expect(sent.name, kUnchangedField);
         expect(sent.phoneNumber, '+2348012345678');
 
         final shown = container.read(userProfileNotifierProvider).account!;
@@ -205,7 +205,7 @@ void main() {
         () => repository.getNotificationPreferences(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => Success(NotificationPreferences.empty()));
       when(
-        () => repository.getSecuritySessions(),
+        () => repository.getSecuritySessions(userId: any(named: 'userId')),
       ).thenAnswer((_) async => const Success(<SecuritySession>[]));
       when(
         () => repository.getOrganization(orgId: any(named: 'orgId')),
@@ -223,7 +223,7 @@ void main() {
         () => repository.getTeamMembers(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => const Success(<TeamMember>[]));
       when(
-        () => repository.getRolesAndPermissions(),
+        () => repository.getRolesAndPermissions(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => const Success(<RolePermission>[]));
       when(
         () => repository.getBillingInfo(),
@@ -343,7 +343,7 @@ void main() {
         () => repository.getNotificationPreferences(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => Success(NotificationPreferences.empty()));
       when(
-        () => repository.getSecuritySessions(),
+        () => repository.getSecuritySessions(userId: any(named: 'userId')),
       ).thenAnswer((_) async => Success(<SecuritySession>[]));
       when(
         () => repository.getOrganization(orgId: any(named: 'orgId')),
@@ -361,7 +361,7 @@ void main() {
         () => repository.getTeamMembers(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => Success(<TeamMember>[]));
       when(
-        () => repository.getRolesAndPermissions(),
+        () => repository.getRolesAndPermissions(orgId: any(named: 'orgId')),
       ).thenAnswer((_) async => Success(<RolePermission>[]));
       when(
         () => repository.getBillingInfo(),

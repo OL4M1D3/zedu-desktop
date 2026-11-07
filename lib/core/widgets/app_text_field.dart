@@ -56,6 +56,14 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   @override
+  void didUpdateWidget(covariant AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPassword != oldWidget.isPassword) {
+      obscureText = widget.isPassword;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final toggleLabel = obscureText ? 'Show password' : 'Hide password';

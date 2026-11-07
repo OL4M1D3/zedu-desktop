@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../../../../helpers/helpers.dart';
+
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
@@ -62,6 +63,53 @@ void main() {
         expect(notifier.messages.single['content'], 'corrected');
         container.dispose();
       }
+    });
+
+    testWidgets('updates attachment details changed by a remote edit', (
+      tester,
+    ) async {
+      final reads = [
+        [
+          {
+            'id': 'm1',
+            'content': 'original',
+            'user_id': 'u1',
+            'media': [
+              {'file_name': 'before.pdf'},
+            ],
+          },
+        ],
+        [
+          {
+            'id': 'm1',
+            'content': 'original',
+            'user_id': 'u1',
+            'media': [
+              {'file_name': 'after.pdf'},
+            ],
+          },
+        ],
+      ];
+      when(
+        () => repository.getMessages(any(), page: any(named: 'page')),
+      ).thenAnswer((_) async => reads.removeAt(0));
+      final container = ProviderContainer(
+        overrides: [
+          authNotifierProvider.overrideWith(_SignedOutAuth.new),
+          dmRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      final notifier = open(container);
+      await tester.pump();
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+
+      expect(notifier.messages, hasLength(1));
+      expect(notifier.messages.single['media'], [
+        {'file_name': 'after.pdf'},
+      ]);
+      container.dispose();
     });
 
     testWidgets('leaves the list alone when the response is unchanged', (
@@ -164,8 +212,11 @@ void main() {
 
   _deleteTests();
   _retryTests();
+  _deleteTests();
+  _retryTests();
   _clearHistoryTests();
   _loadErrorTests();
+  _disposalTests();
   group('ChatHistoryNotifier.saveEdit', () {
     late MockDmRepository mockRepository;
     late ProviderContainer container;
@@ -212,7 +263,7 @@ void main() {
 
       verify(
         () => mockRepository.editMessage(
-          any(),
+          'local-1',
           content: 'edited',
           threadId: 't-1',
         ),
@@ -579,6 +630,112 @@ void _loadErrorTests() {
   });
 }
 
+void _disposalTests() {
+  group('ChatHistoryNotifier disposal guards', () {
+    test(
+      'an edit that completes after dispose notifies no one and does not crash',
+      () async {
+        final mockRepository = MockDmRepository();
+        when(
+          () => mockRepository.getMessages(any(), page: any(named: 'page')),
+        ).thenAnswer(
+          (_) async => [
+            {'id': 'm1', 'content': 'hello', 'user_id': 'u1'},
+          ],
+        );
+        final editRequest = Completer<void>();
+        when(
+          () => mockRepository.editMessage(
+            any(),
+            content: any(named: 'content'),
+            threadId: any(named: 'threadId'),
+          ),
+        ).thenAnswer((_) => editRequest.future);
+
+        final container = ProviderContainer(
+          overrides: [dmRepositoryProvider.overrideWithValue(mockRepository)],
+        );
+        var disposed = false;
+        void disposeOnce() {
+          if (!disposed) {
+            disposed = true;
+            container.dispose();
+          }
+        }
+
+        addTearDown(disposeOnce);
+        // An active listener keeps the autoDispose provider alive until we
+        // deliberately dispose it below.
+        container.listen(chatHistoryProvider('ch-1'), (_, _) {});
+        final notifier = container.read(chatHistoryProvider('ch-1'));
+        await pumpEventQueue();
+
+        // Detach and dispose the notifier while the edit request is in flight,
+        // as happens when the user switches to another conversation.
+        notifier.startEditing('m1');
+        final edit = notifier.saveEdit('m1', 'edited');
+        await pumpEventQueue();
+        disposeOnce();
+
+        editRequest.completeError(Exception('network error'));
+        // Staging's saveEdit reports the failure to its caller; the guarded
+        // continuation must not notify anyone even though the notifier is
+        // disposed.
+        await edit.catchError((_) {});
+        await pumpEventQueue();
+
+        // Without the disposal guard, the late continuation would call
+        // notifyListeners on the disposed notifier and crash here.
+      },
+    );
+
+    test('a delete that completes after dispose does not crash', () async {
+      final mockRepository = MockDmRepository();
+      when(
+        () => mockRepository.getMessages(any(), page: any(named: 'page')),
+      ).thenAnswer(
+        (_) async => [
+          {'id': 'm1', 'content': 'hello', 'user_id': 'u1'},
+        ],
+      );
+      final deleteRequest = Completer<void>();
+      when(
+        () => mockRepository.deleteMessage(
+          threadId: any(named: 'threadId'),
+          channelId: any(named: 'channelId'),
+        ),
+      ).thenAnswer((_) => deleteRequest.future);
+
+      final container = ProviderContainer(
+        overrides: [dmRepositoryProvider.overrideWithValue(mockRepository)],
+      );
+      var disposed = false;
+      void disposeOnce() {
+        if (!disposed) {
+          disposed = true;
+          container.dispose();
+        }
+      }
+
+      addTearDown(disposeOnce);
+      // An active listener keeps the autoDispose provider alive until we
+      // deliberately dispose it below.
+      container.listen(chatHistoryProvider('ch-1'), (_, _) {});
+      final notifier = container.read(chatHistoryProvider('ch-1'));
+      await pumpEventQueue();
+
+      // Fire the delete, then dispose the notifier before the HTTP request
+      // resolves; with the guard the failing continuation stays a no-op.
+      unawaited(notifier.deleteMessage('m1'));
+      await pumpEventQueue();
+      disposeOnce();
+
+      deleteRequest.completeError(Exception('network error'));
+      await pumpEventQueue();
+    });
+  });
+}
+
 class _FakeAuthNotifier extends AuthNotifier {
   @override
   AuthState build() => AuthState(
@@ -736,6 +893,49 @@ void _retryTests() {
       );
       // Work still finishing after dispose must not crash (#2633).
       expect(() => autoNotifier.notifyListeners(), returnsNormally);
+    });
+
+    test('marks message as failed when sendMessage throws an error', () async {
+      when(
+        () => mockRepository.sendMessage(
+          any(),
+          any(),
+          media: any(named: 'media'),
+          mentions: any(named: 'mentions'),
+          isChannel: any(named: 'isChannel'),
+        ),
+      ).thenThrow(Exception('Send message failed'));
+
+      await notifier.sendMessage('failing message');
+
+      expect(notifier.messages.first['status'], 'failed');
+      expect(notifier.messages.first['content'], 'failing message');
+    });
+
+    test('retains failed status when retryMessage throws an error', () async {
+      when(
+        () => mockRepository.sendMessage(
+          any(),
+          any(),
+          media: any(named: 'media'),
+          mentions: any(named: 'mentions'),
+          isChannel: any(named: 'isChannel'),
+        ),
+      ).thenThrow(Exception('Retry failed'));
+
+      notifier.messages = [
+        {
+          'id': 'failed-msg-retry',
+          'content': 'Retrying content',
+          'channel_id': 'channel-xyz',
+          'status': 'failed',
+        },
+      ];
+
+      await notifier.retryMessage('failed-msg-retry');
+
+      expect(notifier.messages.first['status'], 'failed');
+      expect(notifier.messages.first['content'], 'Retrying content');
     });
   });
 }

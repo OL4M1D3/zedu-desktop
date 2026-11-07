@@ -99,7 +99,6 @@ void main() {
                   id: 'ws-1',
                   name: 'Zedu Workspace',
                   avatar: '',
-                  channelsCount: 5,
                 ),
               ),
             ),
@@ -135,7 +134,6 @@ void main() {
                   id: 'ws-1',
                   name: 'Zedu Workspace',
                   avatar: '',
-                  channelsCount: 5,
                 ),
               ),
             ),
@@ -165,6 +163,124 @@ void main() {
 
       final title = container.read(desktopWindowTitleProvider);
       expect(title, 'Ada Okafor · Zedu');
+    });
+
+    test('excludes open channel unread count and archived channels', () async {
+      final container = ProviderContainer(
+        overrides: [
+          authNotifierProvider.overrideWith(
+            () => _FakeAuthNotifier(
+              const AuthState(status: AuthStatus.authenticated),
+            ),
+          ),
+          workspaceProvider.overrideWith(
+            () => _FakeWorkspaceNotifier(
+              const WorkspaceState(
+                selectedWorkspace: Workspace(
+                  id: 'ws-1',
+                  name: 'Zedu',
+                  avatar: '',
+                ),
+              ),
+            ),
+          ),
+          channelProvider.overrideWith(
+            () => _FakeChannelNotifier([
+              Channel(
+                id: 'ch-1',
+                name: 'design',
+                description: '',
+                organisationId: 'ws-1',
+                ownerId: 'u1',
+                unreadCount: 4,
+              ),
+              Channel(
+                id: 'ch-2',
+                name: 'dev',
+                description: '',
+                organisationId: 'ws-1',
+                ownerId: 'u1',
+                unreadCount: 2,
+              ),
+              Channel(
+                id: 'ch-3',
+                name: 'old',
+                description: '',
+                organisationId: 'ws-1',
+                ownerId: 'u1',
+                archived: true,
+                unreadCount: 9,
+              ),
+            ]),
+          ),
+          activeChatProvider.overrideWith(
+            () => _FakeActiveChatNotifier(
+              const ActiveChatState(type: ActiveChatType.channel, id: 'design'),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(channelProvider.future);
+      final title = container.read(desktopWindowTitleProvider);
+      expect(title, '(2) Design · Zedu');
+    });
+
+    test('matches active channel by id as well as by name', () async {
+      final container = ProviderContainer(
+        overrides: [
+          authNotifierProvider.overrideWith(
+            () => _FakeAuthNotifier(
+              const AuthState(status: AuthStatus.authenticated),
+            ),
+          ),
+          workspaceProvider.overrideWith(
+            () => _FakeWorkspaceNotifier(
+              const WorkspaceState(
+                selectedWorkspace: Workspace(
+                  id: 'ws-1',
+                  name: 'Zedu',
+                  avatar: '',
+                ),
+              ),
+            ),
+          ),
+          channelProvider.overrideWith(
+            () => _FakeChannelNotifier([
+              Channel(
+                id: 'ch-uuid-1',
+                name: 'announcements',
+                description: '',
+                organisationId: 'ws-1',
+                ownerId: 'u1',
+                unreadCount: 5,
+              ),
+              Channel(
+                id: 'ch-uuid-2',
+                name: 'random',
+                description: '',
+                organisationId: 'ws-1',
+                ownerId: 'u1',
+                unreadCount: 3,
+              ),
+            ]),
+          ),
+          activeChatProvider.overrideWith(
+            () => _FakeActiveChatNotifier(
+              const ActiveChatState(
+                type: ActiveChatType.channel,
+                id: 'ch-uuid-1',
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(channelProvider.future);
+      final title = container.read(desktopWindowTitleProvider);
+      expect(title, '(3) Announcements · Zedu');
     });
   });
 }
@@ -199,4 +315,12 @@ class _FakeSelectedDmNotifier extends SelectedDmNotifier {
 
   @override
   DmConversation? build() => _initial;
+}
+
+class _FakeChannelNotifier extends ChannelNotifier {
+  final List<Channel> _initial;
+  _FakeChannelNotifier(this._initial);
+
+  @override
+  Future<List<Channel>> build() async => _initial;
 }

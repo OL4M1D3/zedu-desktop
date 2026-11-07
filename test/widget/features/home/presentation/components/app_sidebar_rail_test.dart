@@ -3,6 +3,24 @@ import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 import '../../../../../helpers/helpers.dart';
 
+class _DmListWithUnread extends DmListNotifier {
+  @override
+  Future<List<DmConversation>> build() async => [
+    DmConversation(
+      channelId: 'unread-dm',
+      username: 'Ada',
+      participantId: 'ada',
+      previewMessage: 'Hello',
+      unreadCount: 1,
+    ),
+  ];
+}
+
+class _EmptyDmList extends DmListNotifier {
+  @override
+  Future<List<DmConversation>> build() async => const [];
+}
+
 void main() {
   testWidgets('navigation labels use labelSmall and fit the 50px rail', (
     tester,
@@ -14,6 +32,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [dmListProvider.overrideWith(_EmptyDmList.new)],
         child: MaterialApp(
           theme: AppTheme.light,
           home: const Scaffold(
@@ -72,6 +91,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [dmListProvider.overrideWith(_EmptyDmList.new)],
         child: MaterialApp(
           theme: AppTheme.light,
           home: const Scaffold(
@@ -92,6 +112,32 @@ void main() {
           (w) => w is Tooltip && w.message == 'Settings',
         ),
       ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('notification bell shows an indicator for unread DMs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dmListProvider.overrideWith(_DmListWithUnread.new)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: SizedBox(
+              width: AppSidebarRail.width,
+              height: 600,
+              child: AppSidebarRail(activeType: HomeSidebarType.home),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('notification-unread-indicator')),
       findsOneWidget,
     );
   });

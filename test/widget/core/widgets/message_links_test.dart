@@ -126,6 +126,37 @@ void main() {
     });
   });
 
+  group('MessageLinks.link', () {
+    const style = TextStyle(fontSize: 14);
+    late MessageLinks links;
+
+    setUp(() => links = MessageLinks());
+
+    test('underlines the label and attaches a recognizer', () {
+      final span = links.link('the docs', 'https://example.com/docs', style);
+      expect(span.toPlainText(), 'the docs');
+      expect(span.recognizer, isA<TapGestureRecognizer>());
+      expect(
+        span.style!.decoration!.contains(TextDecoration.underline),
+        isTrue,
+      );
+    });
+
+    test('renders the label plainly for refused schemes', () {
+      final span = links.link('open', 'file:///etc/hosts', style);
+      expect(span.toPlainText(), 'open');
+      expect(span.recognizer, isNull);
+    });
+
+    test('keeps formatted children inside the link', () {
+      final span = links.link('', 'https://example.com', style, [
+        const TextSpan(text: '**docs**'),
+      ]);
+      expect(span.toPlainText(), '**docs**');
+      expect(span.recognizer, isA<TapGestureRecognizer>());
+    });
+  });
+
   testWidgets('MessageLinkScope drops its recognizers with the widget', (
     tester,
   ) async {

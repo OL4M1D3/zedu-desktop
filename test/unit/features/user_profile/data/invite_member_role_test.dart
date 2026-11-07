@@ -53,15 +53,45 @@ void main() {
       },
     );
   });
+
+  group(
+    'UserProfileRemoteDataSourceImpl.inviteMember Referer (Ziki #2708)',
+    () {
+      test(
+        'sends the web app address so the emailed link has a host',
+        () async {
+          final captured = await _captureInvite(
+            invitations: const [],
+            roleName: null,
+          );
+
+          // zedu-be builds the link as Referer + 'accept_org_invitation?...'.
+          expect(captured.headers['Referer'], 'https://example.com/');
+        },
+      );
+
+      test('uses WEB_APP_URL when it is set', () async {
+        final captured = await _captureInvite(
+          invitations: const [],
+          roleName: null,
+          webAppUrl: 'https://app.zedu.chat',
+        );
+
+        expect(captured.headers['Referer'], 'https://app.zedu.chat/');
+      });
+    },
+  );
 }
 
 Future<RequestOptions> _captureInvite({
   required List<dynamic> invitations,
   required String? roleName,
+  String webAppUrl = '',
 }) async {
   final config = AppConfig(
     apiBaseUrl: 'https://api.example.com/api/v1/',
     usesMockData: false,
+    webAppUrl: webAppUrl,
   );
   final dio = Dio();
   RequestOptions? captured;

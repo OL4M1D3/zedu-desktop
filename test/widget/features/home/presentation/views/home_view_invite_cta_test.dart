@@ -78,6 +78,14 @@ class _FakeChannelNotifier extends ChannelNotifier {
   ];
 }
 
+class _FakeChannelHistoryNotifier extends ChannelHistoryNotifier {
+  _FakeChannelHistoryNotifier(super.channelId);
+
+  @override
+  Future<ChannelHistoryState> build() async =>
+      const ChannelHistoryState(messages: []);
+}
+
 class _FakeUserProfileNotifier extends UserProfileNotifier {
   final invitedEmails = <String>[];
   int generatedLinkCount = 0;
@@ -86,7 +94,7 @@ class _FakeUserProfileNotifier extends UserProfileNotifier {
   UserProfileState build() => const UserProfileState();
 
   @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
+  Future<List<TeamMember>> fetchOrganisationMembers() async => [];
 
   @override
   Future<String?> generateInviteLink() async {
@@ -123,9 +131,7 @@ Widget _buildHomeView(_FakeUserProfileNotifier userProfileNotifier) {
       authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
       creditsNotifierProvider.overrideWith(_FakeCreditsNotifier.new),
       channelProvider.overrideWith(_FakeChannelNotifier.new),
-      channelHistoryProvider.overrideWith(
-        (ref, channelId) async => <ChannelMessage>[],
-      ),
+      channelHistoryProvider.overrideWith2(_FakeChannelHistoryNotifier.new),
       workspaceProvider.overrideWith(_FakeWorkspaceNotifier.new),
       userProfileNotifierProvider.overrideWith(() => userProfileNotifier),
     ],
@@ -168,17 +174,6 @@ Finder get _emailField => find.byWidgetPredicate(
 );
 
 Future<void> _loadAppFonts() async {
-  if (!locator.isRegistered<SecureStorageService>()) {
-    locator.registerSingleton<SecureStorageService>(
-      _FakeSecureStorageService(),
-    );
-  }
-  if (!locator.isRegistered<AppConfig>()) {
-    locator.registerSingleton<AppConfig>(
-      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
-    );
-  }
-
   for (final family in ['Lato', 'Roboto']) {
     final loader = FontLoader(family);
     for (final weight in ['Regular', 'Bold']) {
@@ -242,6 +237,16 @@ Future<void> _loadAppFonts() async {
 
 void main() {
   setUpAll(_loadAppFonts);
+
+  setUp(() {
+    locator.registerSingleton<SecureStorageService>(
+      _FakeSecureStorageService(),
+    );
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+    addTearDown(locator.reset);
+  });
 
   group('HomeView invite onboarding CTA', () {
     testWidgets('shows the approved invitation copy and accessible CTA', (

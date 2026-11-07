@@ -186,5 +186,47 @@ void main() {
       expect(state.status, AuthStatus.unauthenticated);
       expect(state.error, isNull);
     });
+
+    test(
+      'restores custom status from user profile on session restore',
+      () async {
+        when(
+          () => storage.getAccessToken(),
+        ).thenAnswer((_) async => 'saved-token');
+        when(() => repository.getCurrentUser()).thenAnswer(
+          (_) async => Success<User>(
+            User(
+              id: 'u1',
+              firstName: 'Alice',
+              lastName: 'Smith',
+              email: 'alice@example.com',
+              phone: '',
+              username: 'alice',
+              isVerified: true,
+              isOnboarded: true,
+              createdAt: DateTime.now(),
+              currentOrg: 'org-1',
+              currentOrganisationSlug: 'acme',
+              avatarUrl: '',
+              defaultAvatarUrl: '',
+              status: const UserStatus(
+                emoji: '\u{1F3AF}',
+                text: 'Deep work',
+                pauseNotifications: true,
+                online: true,
+              ),
+            ),
+          ),
+        );
+
+        final state = await restoreSession();
+
+        expect(state.status, AuthStatus.authenticated);
+        expect(state.user?.status.emoji, '\u{1F3AF}');
+        expect(state.user?.status.text, 'Deep work');
+        expect(state.user?.status.pauseNotifications, isTrue);
+        expect(state.user?.status.hasCustomStatus, isTrue);
+      },
+    );
   });
 }

@@ -5,6 +5,12 @@ import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
 
+/// Files reads who is signed in to decide Share; nobody is needed here.
+class _SignedOut extends AuthNotifier {
+  @override
+  AuthState build() => const AuthState();
+}
+
 const _feedback = 'Could not open this file. Please try again.';
 const _link = 'https://files.zedu.test/report.pdf';
 const _launcherChannel = MethodChannel('plugins.flutter.io/url_launcher');
@@ -34,7 +40,7 @@ class _Repository implements FilesRepository {
   }) async => const Success(FoldersPage(folders: []));
 
   @override
-  Future<Result<WorkspaceFile>> uploadFile(XFile file) =>
+  Future<Result<WorkspaceFile>> uploadFile(XFile file, {String? parentId}) =>
       throw StateError('Opening a file must not upload it');
 
   @override
@@ -43,6 +49,22 @@ class _Repository implements FilesRepository {
     required String orgId,
     String? parentId,
   }) => throw StateError('Opening a file must not create a folder');
+
+  @override
+  Future<Result<Set<String>>> fetchPinnedFileIds() async => const Success({});
+
+  // The preview can't load here, which leaves its Open in browser button.
+  @override
+  Future<Result<Uint8List>> fetchFilePreview(
+    WorkspaceFile file,
+    FilePreviewKind kind,
+  ) async => const Failure(
+    ApiFailure(message: 'offline', kind: ApiFailureKind.network),
+  );
+
+  // The other calls are not made in these tests.
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _Launcher {
@@ -89,6 +111,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         currentOrgIdProvider.overrideWithValue('org-1'),
+        authNotifierProvider.overrideWith(_SignedOut.new),
         userProfileNotifierProvider.overrideWith(_Profile.new),
         filesRepositoryProvider.overrideWithValue(_Repository(link)),
       ],
@@ -100,8 +123,15 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Future<void> _open(WidgetTester tester) async {
+/// Clicking a file previews it; Open in browser opens it outside the app.
+Future<void> _openFromPreview(WidgetTester tester) async {
   await tester.tap(find.text('report.pdf'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byTooltip('Open in browser'));
+}
+
+Future<void> _open(WidgetTester tester) async {
+  await _openFromPreview(tester);
   await tester.pumpAndSettle();
 }
 
@@ -186,7 +216,7 @@ void main() {
       final pending = Completer<bool>();
       final launcher = _Launcher()..pendingLaunch = pending;
       await _pump(tester, launcher);
-      await tester.tap(find.text('report.pdf'));
+      await _openFromPreview(tester);
       await tester.pump();
       expect(launcher.calls, ['canLaunch', 'launch']);
 

@@ -4,12 +4,14 @@ enum UserProfileSection {
   account,
   notifications,
   shortcuts,
+  desktop,
   security,
   organization,
+  webhooks,
   userManagement,
   rolesAndPermissions,
-  webhooks,
   billing,
+  channelManagement,
 }
 
 class UserProfileState {

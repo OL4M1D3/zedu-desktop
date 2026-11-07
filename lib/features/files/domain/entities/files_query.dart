@@ -81,6 +81,10 @@ class FilesQuery {
   final FileCategory? category;
   final DateModifiedFilter? dateModified;
   final String search;
+
+  /// The server always answers newest first; the list reads its pages
+  /// backwards when this is [FilesSort.oldestFirst].
+  final FilesSort sort;
   final int page;
   final int limit;
 
@@ -90,10 +94,23 @@ class FilesQuery {
     this.category,
     this.dateModified,
     this.search = '',
+    this.sort = FilesSort.newestFirst,
     this.page = 1,
     this.limit = 10,
   });
 
+  FilesQuery copyWith({FilesSort? sort, int? page}) => FilesQuery(
+    view: view,
+    folderId: folderId,
+    category: category,
+    dateModified: dateModified,
+    search: search,
+    sort: sort ?? this.sort,
+    page: page ?? this.page,
+    limit: limit,
+  );
+
+  /// The sort is applied by the client, so it is not sent to the server.
   Map<String, dynamic> toQueryParameters() => {
     'mode': view.apiMode,
     'page': page,
@@ -112,6 +129,7 @@ class FilesQuery {
       other.category == category &&
       other.dateModified == dateModified &&
       other.search.trim() == search.trim() &&
+      other.sort == sort &&
       other.page == page &&
       other.limit == limit;
 
@@ -122,6 +140,7 @@ class FilesQuery {
     category,
     dateModified,
     search.trim(),
+    sort,
     page,
     limit,
   );

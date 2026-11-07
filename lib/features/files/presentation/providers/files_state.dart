@@ -40,6 +40,7 @@ class FilesState {
     category: category,
     dateModified: dateModified,
     search: search,
+    sort: sort,
     page: page,
   );
 }

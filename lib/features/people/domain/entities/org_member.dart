@@ -1,3 +1,5 @@
+import 'package:zedu/core/core.dart';
+
 /// A member of the workspace, as `GET /organisations/{id}/users` lists them.
 class OrgMember {
   final String id;
@@ -30,7 +32,7 @@ class OrgMember {
     return 'Unknown';
   }
 
-  String get initial => displayName.substring(0, 1).toUpperCase();
+  String get initial => avatarInitial(displayName);
 
   /// The uploaded avatar, else the generated default, else empty.
   String get photoUrl => avatarUrl.isNotEmpty ? avatarUrl : defaultAvatarUrl;

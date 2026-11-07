@@ -114,7 +114,7 @@ class _BuyCreditsViewState extends ConsumerState<BuyCreditsView> {
                   'All Plans',
                   style: context.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF374151),
+                    color: context.colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -125,11 +125,16 @@ class _BuyCreditsViewState extends ConsumerState<BuyCreditsView> {
                       child: CircularProgressIndicator(),
                     ),
                   )
+                else if (state.status == CreditsStatus.error)
+                  _PackagesLoadError(
+                    message: state.error,
+                    onRetry: () => _loadCredits(null, true),
+                  )
                 else if (state.packages.isEmpty)
                   Text(
-                    state.error ?? 'No AI credit packages available.',
+                    'No AI credit packages available.',
                     style: context.textTheme.bodyMedium?.copyWith(
-                      color: context.colors.error,
+                      color: context.colors.textSecondary,
                     ),
                   )
                 else
@@ -182,11 +187,12 @@ class _BuyCreditsViewState extends ConsumerState<BuyCreditsView> {
         );
       }
     } catch (e) {
+      AppLogger.w('Could not launch credit checkout page', error: e);
       if (context.mounted) {
         AppToastService.show(
           context,
           type: AppToastType.error,
-          message: 'Error launching payment page: $e',
+          message: 'Could not open the payment page. Please try again.',
         );
       }
     }
@@ -212,6 +218,51 @@ class _BuyCreditsViewState extends ConsumerState<BuyCreditsView> {
   }
 }
 
+/// Shown when the AI credit packages could not be loaded, with a way to try
+/// again without leaving the page.
+class _PackagesLoadError extends StatelessWidget {
+  const _PackagesLoadError({required this.message, required this.onRetry});
+
+  final String? message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 40, color: colors.textHint),
+            const SizedBox(height: 12),
+            Text(
+              "Couldn't load AI credit packages.",
+              textAlign: TextAlign.center,
+              style: context.textTheme.titleSmall?.copyWith(
+                color: colors.textPrimary,
+              ),
+            ),
+            if (message != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BalanceChip extends StatelessWidget {
   const _BalanceChip({required this.balance});
 
@@ -233,7 +284,7 @@ class _BalanceChip extends StatelessWidget {
           Icon(Icons.auto_awesome, size: 18, color: colors.primary),
           const SizedBox(width: 8),
           Text(
-            '$balance AI credits',
+            aiCreditsLabel(balance),
             style: context.textTheme.labelLarge?.copyWith(
               color: colors.primary,
               fontWeight: FontWeight.w600,

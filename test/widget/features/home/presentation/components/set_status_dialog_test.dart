@@ -78,6 +78,43 @@ MouseCursor _activeCursor() =>
     RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1)!;
 
 void main() {
+  testWidgets('close button has a tooltip and dismisses the status dialog', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authNotifierProvider.overrideWith(_FakeAuthNotifier.new)],
+        child: MaterialApp(
+          theme: AppTheme.light.copyWith(splashFactory: NoSplash.splashFactory),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => const SetStatusDialog(),
+                ),
+                child: const Text('Open status'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open status'));
+    await tester.pumpAndSettle();
+
+    final closeButton = find.byTooltip('Close');
+    expect(closeButton, findsOneWidget);
+    await tester.tap(closeButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SetStatusDialog), findsNothing);
+  });
+
   group('SetStatusDialog suggested statuses', () {
     testWidgets('shows no selected suggestion initially', (tester) async {
       await _pumpDialog(tester);
@@ -125,6 +162,30 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('clear button appears while typing and empties the field', (
+      tester,
+    ) async {
+      await _pumpDialog(tester);
+
+      // Only the header's close button is there before anything is typed.
+      expect(find.byIcon(Icons.close), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'Deep work');
+      await tester.pump();
+
+      // The clear action joins it once the field has text.
+      expect(find.byIcon(Icons.close), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.close).last);
+      await tester.pump();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(find.byIcon(Icons.close), findsOneWidget);
     });
 
     testWidgets('editing the status text clears the selection', (tester) async {
@@ -243,6 +304,17 @@ void main() {
       expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
     });
 
+    testWidgets('pressing Enter on status input saves status', (tester) async {
+      final notifier = _FakeAuthNotifier();
+      await _pumpDialog(tester, notifier: () => notifier);
+
+      await tester.enterText(find.byType(TextField), 'Deep work');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(notifier.savedTimeout, isNotNull);
+    });
+
     testWidgets('saving without changes keeps the saved settings', (
       tester,
     ) async {
@@ -254,6 +326,18 @@ void main() {
 
       expect(notifier.savedTimeout, StatusTimeout.dontRemove);
       expect(notifier.savedPauseNotifications, isTrue);
+    });
+
+    testWidgets('pressing Enter in status field saves status', (tester) async {
+      final notifier = _FakeAuthNotifier(_signedInWith(UserStatus.empty));
+      await _pumpDialog(tester, notifier: () => notifier);
+
+      final textField = find.byType(TextField);
+      await tester.enterText(textField, 'Deep work');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(notifier.savedTimeout, isNotNull);
     });
   });
 
@@ -310,6 +394,30 @@ void main() {
         await tester.pump();
         expect(_activeCursor(), SystemMouseCursors.click, reason: '$target');
       }
+    });
+  });
+
+  group('SetStatusDialog close button', () {
+    testWidgets('exposes a Close tooltip on hover', (tester) async {
+      await _pumpDialog(tester);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+
+      await mouse.moveTo(tester.getCenter(find.byTooltip('Close')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Close'), findsOneWidget);
+    });
+
+    testWidgets('still closes the dialog', (tester) async {
+      await _pumpDialog(tester);
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SetStatusDialog), findsNothing);
     });
   });
 }

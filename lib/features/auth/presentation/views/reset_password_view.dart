@@ -21,7 +21,10 @@ class _ResetPasswordViewState extends ConsumerState<ResetPasswordView> {
     6,
     (_) => TextEditingController(),
   );
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  late final List<FocusNode> _focusNodes = List.generate(
+    6,
+    (index) => FocusNode(onKeyEvent: (_, event) => _onCodeKey(index, event)),
+  );
 
   Timer? _timer;
   int _secondsLeft = 300;
@@ -85,6 +88,21 @@ class _ResetPasswordViewState extends ConsumerState<ResetPasswordView> {
     }
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Backspace in an empty code box clears the previous box and moves back to
+  /// it. `onChanged` does not fire for a box that is already empty, so this is
+  /// the only way to keep walking back after the last digit was cleared.
+  KeyEventResult _onCodeKey(int index, KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.backspace ||
+        index == 0 ||
+        _tokenControllers[index].text.isNotEmpty) {
+      return KeyEventResult.ignored;
+    }
+    _tokenControllers[index - 1].clear();
+    _focusNodes[index - 1].requestFocus();
+    return KeyEventResult.handled;
   }
 
   Future<void> _onResetPasswordPressed() async {

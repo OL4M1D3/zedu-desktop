@@ -1,3 +1,4 @@
+import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 class OrganisationModel {
@@ -70,14 +71,8 @@ class OrganisationModel {
       orgRoles: json['org_roles'] as List<dynamic>? ?? const [],
       pinned: json['pinned'] as bool? ?? false,
       users: json['Users'],
-      createdAt: json['created_at'] != null
-          ? (DateTime.tryParse(json['created_at'].toString()) ??
-                DateTime.fromMillisecondsSinceEpoch(0))
-          : DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: json['updated_at'] != null
-          ? (DateTime.tryParse(json['updated_at'].toString()) ??
-                DateTime.fromMillisecondsSinceEpoch(0))
-          : DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt: parseApiTimestamp(json['created_at'], field: 'created_at'),
+      updatedAt: parseApiTimestamp(json['updated_at'], field: 'updated_at'),
       channels: json['channels'],
       subscriptionPlanId: json['subscription_plan_id'] as String? ?? '',
       stripeCustomerId: json['stripe_customer_id'] as String? ?? '',

@@ -69,14 +69,35 @@ class ProfileStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trimmed = status.trim();
-    final isActive = trimmed.toLowerCase() == 'active';
+    final lower = trimmed.toLowerCase();
+    final isActive = lower == 'active';
+    final isPending = lower == 'pending';
+
+    final Color bgColor;
+    final Color dotColor;
+    final Color textColor;
+
+    if (isActive) {
+      bgColor = const Color(0xFFECFDF5);
+      dotColor = const Color(0xFF10B981);
+      textColor = const Color(0xFF065F46);
+    } else if (isPending) {
+      bgColor = const Color(0xFFFFF7ED);
+      dotColor = const Color(0xFFF59E0B);
+      textColor = const Color(0xFF92400E);
+    } else {
+      bgColor = const Color(0xFFFEF2F2);
+      dotColor = const Color(0xFFEF4444);
+      textColor = const Color(0xFF991B1B);
+    }
+
     final label = trimmed.isEmpty
         ? 'Unknown'
         : trimmed[0].toUpperCase() + trimmed.substring(1);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -85,20 +106,13 @@ class ProfileStatusPill extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFFEF4444),
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: context.textTheme.labelSmall?.copyWith(
-              color: isActive
-                  ? const Color(0xFF065F46)
-                  : const Color(0xFF991B1B),
+              color: textColor,
               fontWeight: FontWeight.w500,
             ),
           ),

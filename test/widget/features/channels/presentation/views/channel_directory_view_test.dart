@@ -107,4 +107,27 @@ void main() {
     expect(find.text('No channels found.'), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
   });
+
+  testWidgets('shows Join button for channels without access', (tester) async {
+    final unjoined = Channel(
+      id: 'c-2',
+      name: 'random',
+      description: '',
+      organisationId: 'org-1',
+      isPrivate: false,
+      ownerId: 'u-1',
+      archived: false,
+      unreadCount: 0,
+      membersCount: 1,
+      hasAccess: false,
+    );
+
+    await _pump(tester, [
+      [_general, unjoined],
+    ]);
+
+    expect(find.text('general'), findsOneWidget);
+    expect(find.text('random'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Join'), findsOneWidget);
+  });
 }

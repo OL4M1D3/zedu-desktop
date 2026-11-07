@@ -158,52 +158,49 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                   textAlign: TextAlign.center,
                 ),
                 context.gapV(48),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AppTextField(
-                        controller: _usernameController,
-                        label: 'Username',
-                        hint: 'Enter your username',
-                        textInputAction: TextInputAction.next,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Username is required';
-                          }
-                          return null;
-                        },
-                      ),
-                      context.gapV(16),
-                      AppTextField(
-                        controller: _emailController,
-                        label: 'Email address',
-                        hint: 'Enter your email',
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        validator: (value) =>
-                            Validators.validateEmail(context, value),
-                      ),
-                      context.gapV(16),
-                      AppTextField(
-                        isPassword: true,
-                        controller: _passwordController,
-                        label: 'Password',
-                        hint: 'Password',
-                        textInputAction: TextInputAction.done,
-                        validator: (value) {
-                          if (value != null &&
-                              Validators.hasPasswordEdgeSpace(value)) {
-                            return Validators.passwordEdgeSpaceMessage;
-                          }
-                          if (value == null || value.length < 8) {
-                            return 'Password must be at least 8 characters long';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
+                AutofillGroup(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AppTextField(
+                          controller: _usernameController,
+                          autofillHints: const [AutofillHints.newUsername],
+                          label: 'Username',
+                          hint: 'Enter your username',
+                          textInputAction: TextInputAction.next,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Username is required';
+                            }
+                            return null;
+                          },
+                        ),
+                        context.gapV(16),
+                        AppTextField(
+                          controller: _emailController,
+                          autofillHints: const [AutofillHints.email],
+                          label: 'Email address',
+                          hint: 'Enter your email',
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          validator: (value) =>
+                              Validators.validateEmail(context, value),
+                        ),
+                        context.gapV(16),
+                        AppTextField(
+                          isPassword: true,
+                          controller: _passwordController,
+                          autofillHints: const [AutofillHints.newPassword],
+                          label: 'Password',
+                          hint: 'Password',
+                          textInputAction: TextInputAction.done,
+                          validator: (value) =>
+                              Validators.validatePassword(context, value),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 context.gapV(24),

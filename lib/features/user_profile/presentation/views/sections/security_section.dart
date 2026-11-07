@@ -64,7 +64,7 @@ class _SessionsTable extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 800),
           child: DataTable(
-            headingRowColor: WidgetStateProperty.all(const Color(0xFFFAFAFA)),
+            headingRowColor: WidgetStateProperty.all(context.colors.background),
             columns: const [
               DataColumn(label: Text('Device')),
               DataColumn(label: Text('Location')),

@@ -94,6 +94,26 @@ void main() {
       expect(organization.natureOfBusiness, isEmpty);
       expect(organization.country, isEmpty);
     });
+
+    test('shows the country name for a sign-up ISO code (#2081)', () {
+      final lower = OrganizationProfileModel.fromJson(const {'country': 'za'});
+      final upper = OrganizationProfileModel.fromJson(const {'country': 'NG'});
+
+      expect(lower.country, 'South Africa');
+      expect(upper.country, 'Nigeria');
+    });
+
+    test('keeps full names and unknown codes as they are', () {
+      final name = OrganizationProfileModel.fromJson(const {
+        'country': 'Ghana',
+      });
+      final unknown = OrganizationProfileModel.fromJson(const {
+        'country': 'QQ',
+      });
+
+      expect(name.country, 'Ghana');
+      expect(unknown.country, 'QQ');
+    });
   });
 
   group('NotificationPreferencesModel', () {

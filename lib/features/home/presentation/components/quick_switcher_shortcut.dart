@@ -3,7 +3,8 @@ import 'package:zedu/features/features.dart';
 
 /// Opens the [QuickSwitcherDialog] on Cmd+K (macOS) or Ctrl+K (Windows,
 /// Linux), and the [KeyboardShortcutsDialog] on Cmd+/ or Ctrl+/, from any
-/// screen once the user is signed in.
+/// screen once the user is signed in. Alt+Up and Alt+Down move to the
+/// previous or next conversation in the Home sidebar.
 class QuickSwitcherShortcut extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -68,6 +69,30 @@ class _QuickSwitcherShortcutState extends ConsumerState<QuickSwitcherShortcut> {
     }
   }
 
+  /// Opens the conversation [step] places from the open one in the sidebar's
+  /// order (-1 above, 1 below). It stops at either end instead of wrapping.
+  void _moveConversation(int step) {
+    final signedIn =
+        ref.read(authNotifierProvider).status == AuthStatus.authenticated;
+    if (_open || !signedIn) return;
+
+    final entries = sidebarConversationOrder(
+      channels: ref.read(channelProvider).value ?? const <Channel>[],
+      orgId: ref.read(workspaceProvider).selectedWorkspace?.id,
+      dms: ref.read(dmListProvider).value ?? const <DmConversation>[],
+      actions: ref.read(dmConversationActionsProvider),
+      ownUserId: ref.read(authNotifierProvider).user?.id,
+    );
+    final openIndex = openConversationIndex(
+      entries,
+      sidebar: ref.read(homeSidebarProvider),
+      chat: ref.read(activeChatProvider),
+      selectedDm: ref.read(selectedDmProvider),
+    );
+    final next = adjacentConversation(entries, openIndex, step);
+    if (next != null) _openEntry(next);
+  }
+
   void _openEntry(QuickSwitcherEntry entry) {
     final conversation = entry.conversation;
     if (conversation == null) {
@@ -98,6 +123,10 @@ class _QuickSwitcherShortcutState extends ConsumerState<QuickSwitcherShortcut> {
             _showShortcuts,
         const SingleActivator(LogicalKeyboardKey.slash, meta: true):
             _showShortcuts,
+        const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true): () =>
+            _moveConversation(-1),
+        const SingleActivator(LogicalKeyboardKey.arrowDown, alt: true): () =>
+            _moveConversation(1),
       },
       child: widget.child,
     );
@@ -144,7 +173,7 @@ class _QuickSwitcherLoaderState extends ConsumerState<_QuickSwitcherLoader> {
     return QuickSwitcherDialog(
       entries: [
         ...?channels.value
-            ?.where((c) => !c.archived)
+            ?.where((c) => !c.archived && c.hasAccess)
             .map((c) => QuickSwitcherEntry.channel(c.name, channelId: c.id)),
         ...?dms.value?.map(QuickSwitcherEntry.dm),
       ],

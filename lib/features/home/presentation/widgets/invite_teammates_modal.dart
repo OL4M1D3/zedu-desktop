@@ -12,8 +12,8 @@ class InviteTeammatesModal extends ConsumerStatefulWidget {
 class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
   final _emailController = TextEditingController();
   final List<Map<String, String?>> _invites = [];
-  List<Map<String, dynamic>> _registeredUsers = [];
-  List<Map<String, dynamic>> _filteredUsers = [];
+  List<TeamMember> _orgMembers = [];
+  List<TeamMember> _filteredUsers = [];
   bool _isLoading = false;
   bool _isAddingEveryone = false;
   String? _emailError;
@@ -28,10 +28,10 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
 
   Future<void> _loadUsers() async {
     final notifier = ref.read(userProfileNotifierProvider.notifier);
-    final users = await notifier.fetchRegisteredUsers();
+    final members = await notifier.fetchOrganisationMembers();
     if (mounted) {
       setState(() {
-        _registeredUsers = users;
+        _orgMembers = members;
       });
     }
   }
@@ -42,12 +42,11 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
       return;
     }
     setState(() {
-      _filteredUsers = _registeredUsers.where((u) {
-        final email = (u['email'] as String?)?.toLowerCase() ?? '';
-        final name = (u['full_name'] as String?)?.toLowerCase() ?? '';
-        final username = (u['username'] as String?)?.toLowerCase() ?? '';
+      _filteredUsers = _orgMembers.where((u) {
+        final email = u.email.toLowerCase();
+        final name = (u.name ?? '').toLowerCase();
         final q = query.toLowerCase();
-        return email.contains(q) || name.contains(q) || username.contains(q);
+        return email.contains(q) || name.contains(q);
       }).toList();
     });
   }
@@ -133,7 +132,7 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Successfully invited $successCount ${successCount == 1 ? 'teammate' : 'teammates'}.',
+            "Successfully invited $successCount ${successCount == 1 ? 'teammate' : 'teammates'}.",
           ),
           backgroundColor: context.colors.success,
         ),
@@ -322,12 +321,9 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
                     itemCount: _filteredUsers.length,
                     itemBuilder: (context, index) {
                       final user = _filteredUsers[index];
-                      final email = user['email'] as String? ?? '';
-                      final name =
-                          user['full_name'] as String? ??
-                          user['username'] as String? ??
-                          'Unknown';
-                      final userId = user['id'] as String?;
+                      final email = user.email;
+                      final name = user.name ?? email.split('@').first;
+                      final userId = user.id.isEmpty ? null : user.id;
                       return ListTile(
                         title: Text(
                           name,

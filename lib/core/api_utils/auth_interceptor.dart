@@ -30,17 +30,40 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401) {
+    final requestToken = _bearerToken(_authorizationHeader(err.requestOptions));
+    if (err.response?.statusCode == 401 && requestToken != null) {
+      var belongsToCurrentSession = false;
       try {
-        await _storage.deleteAccessToken();
+        // A late 401 from an earlier request must not invalidate a session
+        // established after that request was sent.
+        belongsToCurrentSession =
+            await _storage.getAccessToken() == requestToken;
+        if (belongsToCurrentSession) {
+          await _storage.deleteAccessToken();
+        }
       } catch (error) {
         AppLogger.w(
           'Could not delete the access token: $error',
           tag: 'AuthInterceptor',
         );
       }
-      onUnauthorized?.call();
+      if (belongsToCurrentSession) onUnauthorized?.call();
     }
     handler.next(err);
+  }
+
+  Object? _authorizationHeader(RequestOptions options) {
+    for (final entry in options.headers.entries) {
+      if (entry.key.toLowerCase() == 'authorization') return entry.value;
+    }
+    return null;
+  }
+
+  String? _bearerToken(Object? authorization) {
+    if (authorization is! String || !authorization.startsWith('Bearer ')) {
+      return null;
+    }
+    final token = authorization.substring('Bearer '.length).trim();
+    return token.isEmpty ? null : token;
   }
 }

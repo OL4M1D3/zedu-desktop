@@ -5,3 +5,4 @@ export 'attachment_preview_bar.dart';
 export 'toolbar_button.dart';
 export 'doodle_stroke.dart';
 export 'doodle_dialog.dart';
+export '../../../../home/presentation/components/formatting_help_dialog.dart';

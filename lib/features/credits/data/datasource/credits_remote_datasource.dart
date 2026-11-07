@@ -49,33 +49,19 @@ class CreditsRemoteDataSourceImpl implements CreditsRemoteDataSource {
     if (_config.usesMockData) {
       return CreditUsageModel.fromJson(_mockUsage);
     }
+    // The workspace balance lives on the usage-report endpoint: /credits/usage
+    // returns a per-agent usage list (no balance) whose shape does not fit a
+    // Map cast, so the balance read from that route always failed.
     final response = await _api.get<Map<String, dynamic>>(
-      path: '/credits/usage/$orgId',
+      path: '/credits/usage-report/$orgId',
     );
     final data = response.data['data'];
     if (data is Map<String, dynamic>) return CreditUsageModel.fromJson(data);
-
-    // The live API returns the usage records as a list (each with an
-    // `amount`), and the balance lives on the organisation, which is also how
-    // the web app reads them.
-    final records = data is List
-        ? data.whereType<Map<String, dynamic>>()
-        : const <Map<String, dynamic>>[];
-    final consumed = records.fold<int>(
-      0,
-      (sum, record) => sum + ((record['amount'] as num?)?.toInt() ?? 0),
-    );
-    final org = await _api.get<Map<String, dynamic>>(
-      path: '/organisations/$orgId',
-    );
-    final orgData = org.data['data'];
-    final balance = orgData is Map<String, dynamic>
-        ? (orgData['credit_balance'] as num?)?.toInt() ?? 0
-        : 0;
-    return CreditUsageModel(
-      balance: balance,
-      totalPurchased: 0,
-      totalConsumed: consumed,
+    // Surface the shape problem as a failure instead of reporting a fake,
+    // always-0 balance.
+    throw ApiFailure.fromParsingError(
+      'credits usage-report: expected a Map, got ${data.runtimeType}',
+      path: '/credits/usage-report/$orgId',
     );
   }
 

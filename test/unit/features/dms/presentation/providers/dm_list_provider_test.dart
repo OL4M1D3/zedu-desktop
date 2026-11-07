@@ -87,6 +87,26 @@ void main() {
     );
   });
 
+  test('clears the selected DM when the workspace changes', () {
+    final selected = _conversation('channel-from-org-a');
+    container.read(selectedDmProvider.notifier).select(selected);
+
+    expect(container.read(selectedDmProvider), same(selected));
+
+    container.read(_orgProvider.notifier).select('org-b');
+
+    expect(container.read(selectedDmProvider), isNull);
+  });
+
+  test('preserves the selected DM when the workspace does not change', () {
+    final selected = _conversation('channel-from-org-a');
+    container.read(selectedDmProvider.notifier).select(selected);
+
+    container.read(_orgProvider.notifier).select('org-a');
+
+    expect(container.read(selectedDmProvider), same(selected));
+  });
+
   test(
     'a page from the previous workspace is dropped after a switch',
     () async {
@@ -185,5 +205,52 @@ void _noFakeDmTests() {
 
       expect(conversations, [real]);
     });
+
+    test(
+      'returns an empty list when usesMockData is false and API returns empty list',
+      () async {
+        if (locator.isRegistered<AppConfig>()) {
+          locator.unregister<AppConfig>();
+        }
+        locator.registerSingleton<AppConfig>(
+          const AppConfig(apiBaseUrl: '', usesMockData: false),
+        );
+        addTearDown(() {
+          if (locator.isRegistered<AppConfig>()) {
+            locator.unregister<AppConfig>();
+          }
+        });
+
+        final container = containerFor(const []);
+        final conversations = await container.read(dmListProvider.future);
+
+        expect(conversations, isEmpty);
+        expect(container.read(dmListProvider.notifier).hasMore, isFalse);
+      },
+    );
+
+    test(
+      'injects mock conversation when usesMockData is true and API returns empty list',
+      () async {
+        if (locator.isRegistered<AppConfig>()) {
+          locator.unregister<AppConfig>();
+        }
+        locator.registerSingleton<AppConfig>(
+          const AppConfig(apiBaseUrl: '', usesMockData: true),
+        );
+        addTearDown(() {
+          if (locator.isRegistered<AppConfig>()) {
+            locator.unregister<AppConfig>();
+          }
+        });
+
+        final container = containerFor(const []);
+        final conversations = await container.read(dmListProvider.future);
+
+        expect(conversations.length, 1);
+        expect(conversations.first.channelId, 'mock-channel-id-123');
+        expect(conversations.first.username, 'Test User');
+      },
+    );
   });
 }

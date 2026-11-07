@@ -85,9 +85,11 @@ class PeopleListNotifier extends AsyncNotifier<PeopleListState> {
     try {
       final page = await _fetch(orgId, current.loadedPage + 1);
       if (!ref.mounted) return;
+      if (ref.read(currentOrgIdProvider) != orgId) return;
       state = AsyncData(current._withPage(page));
     } catch (_) {
       if (!ref.mounted) return;
+      if (ref.read(currentOrgIdProvider) != orgId) return;
       state = AsyncData(
         PeopleListState(
           members: current.members,

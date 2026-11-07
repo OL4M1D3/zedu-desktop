@@ -1,4 +1,12 @@
-final _htmlTag = RegExp(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>');
+final _webHtmlPrefix = RegExp(
+  r'^\s*<(p|div|blockquote|pre|h[1-6]|ul|ol|table)\b',
+  caseSensitive: false,
+);
+
+final _htmlTag = RegExp(
+  r'<(/?)(p|div|blockquote|pre|h[1-6]|ul|ol|li|strong|b|em|i|s|del|strike|code|a|span|br|hr|table|tbody|thead|tr|td|th)\b[^>]*>',
+  caseSensitive: false,
+);
 final _htmlEntity = RegExp(r'&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);');
 
 const _namedEntities = {
@@ -39,7 +47,7 @@ const _blockTags = {
 /// renders (`Hello **you**`). Content without HTML tags, such as messages sent
 /// from desktop, is returned unchanged.
 String htmlMessageToMarkdown(String content) {
-  if (!_htmlTag.hasMatch(content)) return content;
+  if (!_webHtmlPrefix.hasMatch(content)) return content;
 
   final out = StringBuffer();
   // Ordered-list counters for the open lists; null marks a bullet list.

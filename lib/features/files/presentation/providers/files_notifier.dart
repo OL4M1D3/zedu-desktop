@@ -36,6 +36,11 @@ class FilesNotifier extends Notifier<FilesState> {
     state = _with(view: view, folderPath: const [], page: 1, folderPage: 1);
   }
 
+  /// Shows [view] while keeping the open folder, so uploads stay visible.
+  void switchViewKeepingFolder(FilesScope view) {
+    state = _with(view: view, folderPath: state.folderPath, page: 1, folderPage: 1);
+  }
+
   /// Opens [folder] inside the current one and shows its files.
   void openFolder(FileFolder folder) {
     state = _with(
@@ -69,7 +74,12 @@ class FilesNotifier extends Notifier<FilesState> {
     state = _with(search: search, page: 1);
   }
 
-  void setSort(FilesSort sort) => state = _with(sort: sort);
+  void setSort(FilesSort sort) {
+    if (sort == state.sort) return;
+    // Reversing the order moves the oldest files to the other end of the
+    // list, so the page the user was on no longer means the same thing.
+    state = _with(sort: sort, page: 1);
+  }
 
   void setTab(FilesTab tab) => state = _with(tab: tab);
 
@@ -85,11 +95,52 @@ class FilesNotifier extends Notifier<FilesState> {
 }
 
 /// The current page of files for the Files page's query.
+///
+/// The server always lists files newest first and offers no sort parameter,
+/// so oldest-first is read from the other end: display page 1 is the last
+/// server page, display page 2 the one before it, and so on. The first page
+/// is fetched once to learn how many pages there are.
 class FilesListNotifier extends AsyncNotifier<FilesPage> {
+  FilesQuery? _seedQuery;
+  int? _serverPages;
+
   @override
   Future<FilesPage> build() async {
+    // Equal filters in another workspace must not reuse this workspace's data.
+    ref.watch(currentOrgIdProvider);
     final query = ref.watch(filesProvider.select((s) => s.query));
-    final result = await ref.read(filesRepositoryProvider).fetchFiles(query);
+    final repository = ref.read(filesRepositoryProvider);
+
+    if (query.sort == FilesSort.newestFirst) {
+      _seedQuery = null;
+      _serverPages = null;
+      return _fetch(repository, query);
+    }
+
+    // The seed page depends on the filters, not on the page or the sort.
+    final seedQuery = query.copyWith(page: 1);
+    if (_seedQuery != seedQuery) {
+      _seedQuery = seedQuery;
+      _serverPages = null;
+    }
+    var totalPages = _serverPages;
+    if (totalPages == null) {
+      totalPages = (await _fetch(repository, seedQuery)).totalPages;
+      _serverPages = totalPages;
+    }
+
+    final serverPage = (totalPages - query.page + 1).clamp(1, totalPages);
+    final page = await _fetch(repository, query.copyWith(page: serverPage));
+    _serverPages = page.totalPages;
+    return FilesPage(
+      files: query.sort.apply(page.files),
+      currentPage: query.page.clamp(1, page.totalPages),
+      totalPages: page.totalPages,
+    );
+  }
+
+  Future<FilesPage> _fetch(FilesRepository repository, FilesQuery query) async {
+    final result = await repository.fetchFiles(query);
     return switch (result) {
       Success<FilesPage>(:final value) => value,
       Failure<FilesPage>(:final error) => throw error,
@@ -101,6 +152,7 @@ class FilesListNotifier extends AsyncNotifier<FilesPage> {
 class FoldersListNotifier extends AsyncNotifier<FoldersPage> {
   @override
   Future<FoldersPage> build() async {
+    ref.watch(currentOrgIdProvider);
     final (view, parentId, page) = ref.watch(
       filesProvider.select((s) => (s.view, s.folderId, s.folderPage)),
     );
@@ -118,18 +170,27 @@ class FoldersListNotifier extends AsyncNotifier<FoldersPage> {
 class FilesUploadOutcome {
   final int uploaded;
   final List<String> failedNames;
+  final List<String> skippedNames;
+  final bool workspaceChanged;
 
-  const FilesUploadOutcome({required this.uploaded, required this.failedNames});
+  const FilesUploadOutcome({
+    required this.uploaded,
+    required this.failedNames,
+    this.skippedNames = const [],
+    this.workspaceChanged = false,
+  });
 }
 
 /// Whether an upload or a folder creation is running.
 class FilesActionsState {
   final int uploadsLeft;
   final bool isCreatingFolder;
+  final bool isDeletingFolder;
 
   const FilesActionsState({
     this.uploadsLeft = 0,
     this.isCreatingFolder = false,
+    this.isDeletingFolder = false,
   });
 
   bool get isUploading => uploadsLeft > 0;
@@ -137,8 +198,15 @@ class FilesActionsState {
 
 /// Upload File and New Folder. Each refreshes the list it changed.
 class FilesActionsNotifier extends Notifier<FilesActionsState> {
+  int _workspaceVersion = 0;
+
   @override
-  FilesActionsState build() => const FilesActionsState();
+  FilesActionsState build() {
+    ref.listen(currentOrgIdProvider, (previous, next) {
+      if (previous != next) _workspaceVersion++;
+    });
+    return const FilesActionsState();
+  }
 
   /// Uploads [files] one at a time, as the web app does, then shows the
   /// Files tab at the top level, where the server puts uploads. Deleted files
@@ -149,14 +217,27 @@ class FilesActionsNotifier extends Notifier<FilesActionsState> {
       return const FilesUploadOutcome(uploaded: 0, failedNames: []);
     }
     final repository = ref.read(filesRepositoryProvider);
+    final parentId = ref.read(filesProvider).folderId;
+    final workspace = ref.read(currentOrgIdProvider);
+    final version = _workspaceVersion;
+    bool sameWorkspace() =>
+        ref.mounted &&
+        ref.read(currentOrgIdProvider) == workspace &&
+        _workspaceVersion == version;
     var uploaded = 0;
     final failed = <String>[];
+    final skipped = <String>[];
     state = FilesActionsState(
       uploadsLeft: files.length,
       isCreatingFolder: state.isCreatingFolder,
     );
-    for (final file in files) {
-      final result = await repository.uploadFile(file);
+    for (var index = 0; index < files.length; index++) {
+      if (!sameWorkspace()) {
+        skipped.addAll(files.skip(index).map((file) => file.name));
+        break;
+      }
+      final file = files[index];
+      final result = await repository.uploadFile(file, parentId: parentId);
       if (!ref.mounted) break;
       switch (result) {
         case Success():
@@ -169,19 +250,31 @@ class FilesActionsNotifier extends Notifier<FilesActionsState> {
         isCreatingFolder: state.isCreatingFolder,
       );
     }
-    if (ref.mounted && uploaded > 0) {
+    final workspaceChanged = !sameWorkspace();
+    if (ref.mounted) {
+      state = FilesActionsState(isCreatingFolder: state.isCreatingFolder);
+    }
+    if (!workspaceChanged && uploaded > 0) {
       final files = ref.read(filesProvider.notifier);
       final view = ref.read(filesProvider).view;
-      if (view == FilesScope.trash || view == FilesScope.shared) {
+      if (view == FilesScope.trash) {
+        // Trash has no folders, so All files is the only place uploads can
+        // show; keep the open folder so the uploaded file is visible.
+        files.switchViewKeepingFolder(FilesScope.all);
+      } else if (view == FilesScope.shared) {
         files.selectView(FilesScope.all);
       }
       files
-        ..goToDepth(0)
         ..setTab(FilesTab.files)
         ..setPage(1);
       ref.invalidate(filesListProvider);
     }
-    return FilesUploadOutcome(uploaded: uploaded, failedNames: failed);
+    return FilesUploadOutcome(
+      uploaded: uploaded,
+      failedNames: failed,
+      skippedNames: skipped,
+      workspaceChanged: workspaceChanged,
+    );
   }
 
   /// Creates [name] inside the open folder. Returns an error message, or
@@ -219,9 +312,43 @@ class FilesActionsNotifier extends Notifier<FilesActionsState> {
         ref.invalidate(foldersListProvider);
         return null;
       case Failure(:final error):
+        final message = switch (error.kind) {
+          ApiFailureKind.unknown || ApiFailureKind.parsing => '',
+          _ => error.friendlyMessage,
+        };
+        return message.isNotEmpty
+            ? message
+            : 'Could not create the folder. Try again.';
+    }
+  }
+
+  /// Deletes [folder]. Returns an error message, or null when it worked.
+  Future<String?> deleteFolder(FileFolder folder) async {
+    if (state.isDeletingFolder) return null;
+    state = FilesActionsState(
+      uploadsLeft: state.uploadsLeft,
+      isCreatingFolder: state.isCreatingFolder,
+      isDeletingFolder: true,
+    );
+    final result = await ref
+        .read(filesRepositoryProvider)
+        .deleteFolder(folder.id);
+    if (!ref.mounted) return null;
+    state = FilesActionsState(uploadsLeft: state.uploadsLeft);
+    switch (result) {
+      case Success():
+        final notifier = ref.read(filesProvider.notifier);
+        // Leaving a folder that no longer exists: step back to its parent.
+        final path = ref.read(filesProvider).folderPath;
+        final depth = path.indexWhere((f) => f.id == folder.id);
+        if (depth >= 0) notifier.goToDepth(depth);
+        notifier.setTab(FilesTab.folders);
+        ref.invalidate(foldersListProvider);
+        return null;
+      case Failure(:final error):
         return error.message.isNotEmpty
             ? error.message
-            : 'Could not create the folder. Try again.';
+            : 'Could not delete the folder. Try again.';
     }
   }
 }

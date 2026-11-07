@@ -1,3 +1,4 @@
+import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 class ProfileAccountModel extends ProfileAccount {
@@ -206,7 +207,7 @@ class OrganizationProfileModel extends OrganizationProfile {
           json['nature_of_business'] as String? ??
           json['type'] as String? ??
           '',
-      country: json['country'] as String? ?? '',
+      country: countryDisplayName(json['country'] as String? ?? ''),
     );
   }
 
@@ -227,14 +228,46 @@ class SecuritySessionModel extends SecuritySession {
     required super.status,
   });
 
+  /// Reads a session from `GET /users/{id}/sessions` (`created_at`,
+  /// `updated_at`, `is_live`) or from the mock data (display strings). The
+  /// API gives no device or location, so those show [unknown] rather than
+  /// made-up values.
   factory SecuritySessionModel.fromJson(Map<String, dynamic> json) {
+    final isLive = json['is_live'];
     return SecuritySessionModel(
-      device: json['device'] as String? ?? 'Chrome',
-      location: json['location'] as String? ?? 'Lagos',
-      date: json['date'] as String? ?? 'May 8, 2026 1:07 PM',
-      lastActive: json['last_active'] as String? ?? 'May 8, 2026 3:07 PM',
-      status: json['status'] as String? ?? 'Active',
+      device: _text(json['device']) ?? unknown,
+      location: _text(json['location']) ?? unknown,
+      date: _text(json['date']) ?? _formatTime(json['created_at']) ?? unknown,
+      lastActive:
+          _text(json['last_active']) ??
+          _formatTime(json['updated_at']) ??
+          unknown,
+      status:
+          _text(json['status']) ??
+          (isLive is bool ? (isLive ? 'Active' : 'Signed out') : unknown),
     );
+  }
+
+  /// Shown for a detail the server doesn't send.
+  static const unknown = '—';
+
+  static String? _text(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value : null;
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  /// "May 8, 2026 1:07 PM" in local time, or null when [value] isn't a time.
+  static String? _formatTime(Object? value) {
+    final parsed = value is String ? DateTime.tryParse(value) : null;
+    if (parsed == null) return null;
+    final t = parsed.toLocal();
+    final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final period = t.hour < 12 ? 'AM' : 'PM';
+    return '${_months[t.month - 1]} ${t.day}, ${t.year} $hour:$minute $period';
   }
 }
 
@@ -255,14 +288,19 @@ class TeamMemberModel extends TeamMember {
       email: json['email'] as String? ?? 'anonymoususer@gmail.com',
       role: json['role'] as String? ?? 'Administrator',
       dateJoined: json['date_joined'] as String? ?? 'May 3, 2026',
-      status: _statusFromJson(json['status'] as String?),
+      status: statusFromJson(json),
       name: json['name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
     );
   }
 
-  static TeamMemberStatus _statusFromJson(String? value) {
-    return switch (value) {
+  /// Reads a member's status from an API record: `status` ("pending",
+  /// "inactive", any case), and `is_deactivated: true` counts as inactive.
+  /// Anything else is active.
+  static TeamMemberStatus statusFromJson(Map<String, dynamic> json) {
+    if (json['is_deactivated'] == true) return TeamMemberStatus.inactive;
+    final value = json['status'];
+    return switch (value is String ? value.trim().toLowerCase() : null) {
       'pending' => TeamMemberStatus.pending,
       'inactive' => TeamMemberStatus.inactive,
       _ => TeamMemberStatus.active,
@@ -278,11 +316,21 @@ class RolePermissionModel extends RolePermission {
   });
 
   factory RolePermissionModel.fromJson(Map<String, dynamic> json) {
+    // Organisation role records use `name` and a map of permission flags,
+    // e.g. {"can_create_channels": true}; keep only the granted keys.
+    final rawPermissions = json['permissions'];
+    final permissions = switch (rawPermissions) {
+      final List<dynamic> list => list.cast<String>(),
+      final Map<dynamic, dynamic> map => [
+        for (final entry in map.entries)
+          if (entry.value == true) entry.key.toString(),
+      ],
+      _ => const <String>[],
+    };
     return RolePermissionModel(
-      role: json['role'] as String? ?? 'User',
+      role: json['role'] as String? ?? json['name'] as String? ?? 'User',
       description: json['description'] as String? ?? '',
-      permissions:
-          (json['permissions'] as List<dynamic>?)?.cast<String>() ?? const [],
+      permissions: permissions,
     );
   }
 }

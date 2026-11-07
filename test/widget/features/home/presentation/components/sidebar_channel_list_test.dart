@@ -6,6 +6,7 @@ Channel _channel(
   String name, {
   bool archived = false,
   bool isPrivate = false,
+  bool hasAccess = true,
   String org = 'org-1',
 }) => Channel(
   id: 'channel-$name',
@@ -15,6 +16,7 @@ Channel _channel(
   ownerId: 'user-1',
   archived: archived,
   isPrivate: isPrivate,
+  hasAccess: hasAccess,
 );
 
 class FakeChannelNotifier extends ChannelNotifier {
@@ -23,6 +25,7 @@ class FakeChannelNotifier extends ChannelNotifier {
     _channel('general'),
     _channel('random'),
     _channel('old', archived: true),
+    _channel('left-channel', hasAccess: false),
   ];
 }
 
@@ -104,6 +107,7 @@ void main() {
       expect(find.text('general'), findsOneWidget);
       expect(find.text('random'), findsOneWidget);
       expect(find.text('old'), findsNothing);
+      expect(find.text('left-channel'), findsNothing);
     });
 
     group('after a workspace switch', () {
@@ -190,6 +194,35 @@ void main() {
         expect(isHighlighted(tester, 'general'), isFalse);
         expect(isHighlighted(tester, 'random'), isFalse);
       });
+
+      testWidgets(
+        'renders accent indicator bar and distinct hash mark on active channel',
+        (tester) async {
+          await pumpList(tester, channels: FakeChannelNotifier.new);
+
+          // Active channel has an accent DecoratedBox indicator bar
+          final generalItem = find.ancestor(
+            of: find.text('general'),
+            matching: find.byType(Ink),
+          );
+          final indicator = find.descendant(
+            of: generalItem,
+            matching: find.byType(DecoratedBox),
+          );
+          expect(indicator, findsOneWidget);
+
+          // Inactive channel does not have an indicator bar
+          final randomItem = find.ancestor(
+            of: find.text('random'),
+            matching: find.byType(Ink),
+          );
+          final randomIndicator = find.descendant(
+            of: randomItem,
+            matching: find.byType(DecoratedBox),
+          );
+          expect(randomIndicator, findsNothing);
+        },
+      );
     });
 
     testWidgets('tapping a channel opens it', (tester) async {

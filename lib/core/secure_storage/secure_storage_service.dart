@@ -22,6 +22,11 @@ class SecureStorageService {
     }
   }
 
+  /// Swaps in a new token for the signed-in session, keeping whether it is
+  /// remembered across launches the same as when the user signed in.
+  Future<void> replaceAccessToken(String token) =>
+      saveAccessToken(token, persist: _sessionToken == null);
+
   Future<String?> getAccessToken() async =>
       _sessionToken ?? await _storage.read(key: _accessTokenKey);
 

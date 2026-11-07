@@ -86,4 +86,107 @@ void main() {
       verifyNoMoreInteractions(api);
     },
   );
+
+  test(
+    'live getUsage reads the balance from the usage-report endpoint',
+    () async {
+      final live = CreditsRemoteDataSourceImpl(
+        config: const AppConfig(
+          apiBaseUrl: 'https://example.invalid',
+          usesMockData: false,
+        ),
+        apiBaseService: api,
+      );
+      // The report endpoint answers with the balance and the credited/used
+      // aliases (see ZE-2700), and the usage model must pick them up.
+      when(
+        () =>
+            api.get<Map<String, dynamic>>(path: '/credits/usage-report/org-1'),
+      ).thenAnswer(
+        (_) async => const ApiResponseModel(
+          data: <String, dynamic>{
+            'data': <String, dynamic>{
+              'balance': 120,
+              'total_credited': 500,
+              'total_used': 380,
+            },
+          },
+          statusCode: 200,
+        ),
+      );
+
+      final usage = await live.getUsage('org-1');
+
+      expect(usage.balance, 120);
+      expect(usage.totalPurchased, 500);
+      expect(usage.totalConsumed, 380);
+      verify(
+        () =>
+            api.get<Map<String, dynamic>>(path: '/credits/usage-report/org-1'),
+      ).called(1);
+      verifyNoMoreInteractions(api);
+    },
+  );
+
+  test(
+    'live getUsage fails loudly when the report body is not a Map',
+    () async {
+      final live = CreditsRemoteDataSourceImpl(
+        config: const AppConfig(
+          apiBaseUrl: 'https://example.invalid',
+          usesMockData: false,
+        ),
+        apiBaseService: api,
+      );
+      when(
+        () =>
+            api.get<Map<String, dynamic>>(path: '/credits/usage-report/org-1'),
+      ).thenAnswer(
+        (_) async => const ApiResponseModel(
+          data: <String, dynamic>{
+            'data': <Map<String, dynamic>>[
+              {'amount': 5, 'agent_name': 'Ada'},
+            ],
+          },
+          statusCode: 200,
+        ),
+      );
+
+      await expectLater(live.getUsage('org-1'), throwsA(isA<ApiFailure>()));
+    },
+  );
+
+  test(
+    'live getUsageReport maps the report endpoint aliases to its totals',
+    () async {
+      final live = CreditsRemoteDataSourceImpl(
+        config: const AppConfig(
+          apiBaseUrl: 'https://example.invalid',
+          usesMockData: false,
+        ),
+        apiBaseService: api,
+      );
+      when(
+        () =>
+            api.get<Map<String, dynamic>>(path: '/credits/usage-report/org-1'),
+      ).thenAnswer(
+        (_) async => const ApiResponseModel(
+          data: <String, dynamic>{
+            'data': <String, dynamic>{
+              'balance': 44,
+              'total_credited': 900,
+              'total_used': 856,
+            },
+          },
+          statusCode: 200,
+        ),
+      );
+
+      final report = await live.getUsageReport('org-1');
+
+      expect(report.balance, 44);
+      expect(report.purchased, 900);
+      expect(report.consumed, 856);
+    },
+  );
 }

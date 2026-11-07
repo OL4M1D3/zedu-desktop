@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:zedu/core/core.dart';
 
 enum AppToastType { success, error, info }
 
 class AppToastService {
   static OverlayEntry? _current;
+  static VoidCallback? _currentRemover;
 
   static void show(
     BuildContext context, {
@@ -42,10 +45,25 @@ class AppToastService {
     required AppToastType type,
     required String message,
   }) {
-    _current?.remove();
+    _currentRemover?.call();
     _current = null;
+    _currentRemover = null;
 
     late OverlayEntry entry;
+    // Two dismissals can race: the close button and the auto-dismiss timer, or
+    // two quick clicks on the close button. Removing an OverlayEntry twice
+    // throws, so every path goes through this once-only remover.
+    var removed = false;
+    void removeEntry() {
+      if (removed) return;
+      removed = true;
+      entry.remove();
+      if (_current == entry) {
+        _current = null;
+        _currentRemover = null;
+      }
+    }
+
     entry = OverlayEntry(
       builder: (ctx) {
         final mq = MediaQuery.of(ctx);
@@ -59,15 +77,13 @@ class AppToastService {
             type: type,
             message: message,
             scale: scale,
-            onDismiss: () {
-              entry.remove();
-              if (_current == entry) _current = null;
-            },
+            onDismiss: removeEntry,
           ),
         );
       },
     );
     _current = entry;
+    _currentRemover = removeEntry;
     overlay.insert(entry);
   }
 }
@@ -94,6 +110,7 @@ class _AppToastWidgetState extends State<_AppToastWidget>
   late final AnimationController _controller;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+  Timer? _dismissTimer;
 
   @override
   void initState() {
@@ -108,7 +125,17 @@ class _AppToastWidgetState extends State<_AppToastWidget>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
-    Future.delayed(const Duration(seconds: 4), _dismiss);
+    _startDismissTimer();
+  }
+
+  void _startDismissTimer() {
+    _dismissTimer?.cancel();
+    _dismissTimer = Timer(const Duration(seconds: 4), _dismiss);
+  }
+
+  void _pauseDismissTimer() {
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
   }
 
   bool _shown = false;
@@ -131,12 +158,14 @@ class _AppToastWidgetState extends State<_AppToastWidget>
 
   Future<void> _dismiss() async {
     if (!mounted) return;
+    _pauseDismissTimer();
     if (!_reduceMotion) await _controller.reverse();
     widget.onDismiss();
   }
 
   @override
   void dispose() {
+    _dismissTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -167,86 +196,96 @@ class _AppToastWidgetState extends State<_AppToastWidget>
       ),
     };
 
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: 340 * s,
-            constraints: BoxConstraints(minHeight: 64 * s),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(8 * s),
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.25),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: colors.textPrimary.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+    return MouseRegion(
+      onEnter: (_) => _pauseDismissTimer(),
+      onExit: (_) => _startDismissTimer(),
+      child: FadeTransition(
+        opacity: _fade,
+        child: SlideTransition(
+          position: _slide,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 340 * s,
+              constraints: BoxConstraints(minHeight: 64 * s),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(8 * s),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: 0.25),
+                  width: 1,
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8 * s),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(width: 4 * s, color: accentColor),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 14 * s,
-                          vertical: 12 * s,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(icon, color: accentColor, size: 20 * s),
-                            SizedBox(width: 10 * s),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: context.textTheme.bodyLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: accentColor,
-                                        ),
-                                  ),
-                                  SizedBox(height: 3 * s),
-                                  Text(
-                                    widget.message,
-                                    style: context.textTheme.bodyMedium
-                                        ?.copyWith(
-                                          color: context.colors.textPrimary,
-                                        ),
-                                  ),
-                                ],
+                boxShadow: [
+                  BoxShadow(
+                    color: colors.textPrimary.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8 * s),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(width: 4 * s, color: accentColor),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 14 * s,
+                            vertical: 12 * s,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(icon, color: accentColor, size: 20 * s),
+                              SizedBox(width: 10 * s),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: context.textTheme.bodyLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: accentColor,
+                                          ),
+                                    ),
+                                    SizedBox(height: 3 * s),
+                                    Text(
+                                      widget.message,
+                                      style: context.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: context.colors.textPrimary,
+                                          ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            SizedBox(width: 8 * s),
-                            GestureDetector(
-                              onTap: _dismiss,
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16 * s,
-                                color: context.colors.textHint,
+                              SizedBox(width: 8 * s),
+                              Tooltip(
+                                message: 'Dismiss notification',
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    onTap: _dismiss,
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      size: 16 * s,
+                                      color: context.colors.textHint,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

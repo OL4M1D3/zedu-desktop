@@ -205,6 +205,40 @@ void main() {
       expect(org, 'org-ws');
     });
 
+    testWidgets(
+      'does not subscribe to uriLinkStream when unmounted while getting initial link',
+      (tester) async {
+        final completer = Completer<Uri?>();
+        when(
+          () => mockAppLinks.getInitialLink(),
+        ).thenAnswer((_) => completer.future);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authNotifierProvider.overrideWith(
+                () => FakeDeepLinkAuthNotifier(user: _user()),
+              ),
+            ],
+            child: MaterialApp(
+              home: CreditsPaymentDeepLinkListener(
+                appLinks: mockAppLinks,
+                child: const SizedBox(),
+              ),
+            ),
+          ),
+        );
+
+        // Unmount the listener before initial link completes
+        await tester.pumpWidget(const SizedBox());
+
+        completer.complete(null);
+        await tester.pump();
+
+        expect(linkController.hasListener, isFalse);
+      },
+    );
+
     testWidgets('falls back to the sign-in org when no workspace is selected', (
       tester,
     ) async {

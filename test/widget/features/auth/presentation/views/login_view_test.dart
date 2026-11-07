@@ -19,6 +19,12 @@ class FakeAuthNotifier extends AuthNotifier {
   final void Function(String email, String password)? _onLogin;
   final Future<void>? _pendingLogin;
   bool? lastRememberMe;
+  bool? lastGoogleRememberMe;
+
+  @override
+  Future<void> loginWithGoogle({bool rememberMe = true}) async {
+    lastGoogleRememberMe = rememberMe;
+  }
 
   @override
   AuthState build() => _initial;
@@ -474,6 +480,20 @@ void main() {
       );
     });
 
+    testWidgets('aligns the Remember me checkbox with the form fields', (
+      tester,
+    ) async {
+      await pumpDesktopLogin(tester, FakeAuthNotifier());
+
+      final checkboxRect = tester.getRect(find.byType(Checkbox));
+      final fieldRect = tester.getRect(find.byType(TextFormField).first);
+      final labelRect = tester.getRect(find.text('Remember me'));
+
+      expect(checkboxRect.left, moreOrLessEquals(fieldRect.left));
+      expect(checkboxRect.width, lessThan(40));
+      expect(labelRect.left - checkboxRect.right, moreOrLessEquals(8));
+    });
+
     for (final ticked in [false, true]) {
       testWidgets('passes Remember me = $ticked to login', (tester) async {
         final notifier = FakeAuthNotifier();
@@ -497,7 +517,52 @@ void main() {
 
         expect(notifier.lastRememberMe, ticked);
       });
+
+      testWidgets('passes Remember me =  to loginWithGoogle', (tester) async {
+        final notifier = FakeAuthNotifier();
+        await pumpDesktopLogin(tester, notifier);
+
+        if (ticked) {
+          await tester.ensureVisible(find.byType(Checkbox));
+          await tester.tap(find.byType(Checkbox));
+          await tester.pump();
+        }
+
+        final googleButton = find.widgetWithText(
+          SocialAuthButton,
+          'Sign in with Google',
+        );
+        await tester.ensureVisible(googleButton);
+        await tester.tap(googleButton);
+        await tester.pumpAndSettle();
+
+        expect(notifier.lastGoogleRememberMe, ticked);
+      });
     }
+
+    testWidgets('centers the login with magic link link beneath the button', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 1024));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildLoginViewUnderTest());
+      await tester.pumpAndSettle();
+
+      final linkText = find.text('Login with magic link');
+      expect(linkText, findsOneWidget);
+
+      final align = tester.widget<Align>(
+        find.ancestor(of: linkText, matching: find.byType(Align)).first,
+      );
+      expect(align.alignment, Alignment.center);
+
+      final linkCenter = tester.getCenter(linkText);
+      final buttonCenter = tester.getCenter(
+        find.widgetWithText(ElevatedButton, 'Login'),
+      );
+      expect((linkCenter.dx - buttonCenter.dx).abs(), lessThan(1.0));
+    });
 
     testWidgets('Tab moves directly from email to password', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1440, 1024));
@@ -517,6 +582,14 @@ void main() {
         ),
       );
       expect(passwordField.focusNode.hasFocus, isTrue);
+    });
+    testWidgets('disposes tap gesture recognizers cleanly on unmount', (
+      tester,
+    ) async {
+      await pumpDesktopLogin(tester, FakeAuthNotifier());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(find.byType(LoginView), findsNothing);
     });
   });
 }

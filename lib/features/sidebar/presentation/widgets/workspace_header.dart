@@ -129,7 +129,7 @@ class _WorkspaceSwitcherHeaderState
                 ref.read(activeChatProvider.notifier).selectNewGroupChat();
               },
               icon: Icon(
-                Icons.add,
+                Icons.edit_note,
                 color: colors.onPrimary.withValues(alpha: 0.7),
                 size: 20,
               ),

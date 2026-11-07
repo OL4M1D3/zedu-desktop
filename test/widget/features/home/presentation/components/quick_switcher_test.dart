@@ -1,5 +1,6 @@
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
+
 import '../../../../../helpers/helpers.dart';
 
 DmConversation _dm(String username) => DmConversation(
@@ -45,6 +46,20 @@ void main() {
       expect(labels, ['design', 'web-design']);
     });
 
+    test('matches channels and DMs when query has leading # or @', () {
+      final channelLabels = filterQuickSwitcherEntries(
+        entries,
+        '#gen',
+      ).map((e) => e.label);
+      final dmLabels = filterQuickSwitcherEntries(
+        entries,
+        '@gid',
+      ).map((e) => e.label);
+
+      expect(channelLabels, ['general']);
+      expect(dmLabels, ['Gideon']);
+    });
+
     test('returns nothing when no name matches', () {
       expect(filterQuickSwitcherEntries(entries, 'zzz'), isEmpty);
     });
@@ -82,6 +97,19 @@ void main() {
 
       expect(find.text('Gideon'), findsOneWidget);
       expect(find.text('general'), findsNothing);
+      expect(find.text('design'), findsNothing);
+    });
+
+    testWidgets('typing # before a channel name filters the list', (
+      tester,
+    ) async {
+      await pumpDialog(tester);
+
+      await tester.enterText(find.byType(TextField), '#gen');
+      await tester.pump();
+
+      expect(find.text('general'), findsOneWidget);
+      expect(find.text('Gideon'), findsNothing);
       expect(find.text('design'), findsNothing);
     });
 

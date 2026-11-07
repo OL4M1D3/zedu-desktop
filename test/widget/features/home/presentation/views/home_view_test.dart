@@ -3,18 +3,29 @@ import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
 
-Channel _channel(String name) => Channel(
+Channel _channel(String name, {String? topic}) => Channel(
   id: 'channel-$name',
   name: name,
   description: '',
   organisationId: 'org-1',
   ownerId: 'user-1',
+  topic: topic,
 );
+
+class _TopicChannelNotifier extends ChannelNotifier {
+  @override
+  Future<List<Channel>> build() async => [
+    _channel('general', topic: 'Release planning'),
+    _channel('random'),
+  ];
+}
 
 class _EmptyChannelRepository extends Mock implements ChannelRepository {
   @override
-  Future<Result<List<ChannelMessage>>> fetchChannelMessages(String id) async =>
-      const Success(<ChannelMessage>[]);
+  Future<Result<ChannelMessagePage>> fetchChannelMessages(
+    String id, {
+    int page = 1,
+  }) async => const Success(ChannelMessagePage(messages: [], hasMore: false));
 
   @override
   Future<Result<List<DmParticipant>>> fetchChannelMembers(String id) async =>
@@ -42,6 +53,44 @@ class _LeavingChannelRepository extends _EmptyChannelRepository {
     left.add(channelId);
     return leaveResult;
   }
+}
+
+/// Records archive calls and answers with [archiveResult].
+class _ArchivingChannelRepository extends _EmptyChannelRepository {
+  _ArchivingChannelRepository(this.archiveResult);
+
+  final Result<void> archiveResult;
+  final archived = <(String, bool)>[];
+
+  @override
+  Future<Result<void>> archiveChannel(String channelId, bool value) async {
+    archived.add((channelId, value));
+    return archiveResult;
+  }
+
+  @override
+  Future<Result<List<Channel>>> fetchArchivedChannels(String orgId) async =>
+      const Success(<Channel>[]);
+}
+
+/// Keeps every export running, so the export dialog stays on "Preparing".
+class _ExportingChannelRepository extends _EmptyChannelRepository {
+  final exported = <String>[];
+
+  @override
+  Future<Result<ChannelExport>> startChannelExport(String channelId) async {
+    exported.add(channelId);
+    return const Success(
+      ChannelExport(id: 'e1', status: ChannelExportStatus.pending),
+    );
+  }
+
+  @override
+  Future<Result<ChannelExport>> fetchChannelExportStatus(
+    String channelId,
+  ) async => const Success(
+    ChannelExport(id: 'e1', status: ChannelExportStatus.pending),
+  );
 }
 
 class FakeSecureStorageService extends Fake implements SecureStorageService {
@@ -151,6 +200,19 @@ void main() {
 
       expect(find.text('# general'), findsOneWidget);
       expect(find.text('Welcome to #general'), findsOneWidget);
+    });
+
+    testWidgets('shows the channel topic in the header when set (#2852)', (
+      tester,
+    ) async {
+      await pumpSidebarAndChat(tester, channels: _TopicChannelNotifier.new);
+
+      expect(find.text('Release planning'), findsOneWidget);
+
+      await tester.tap(find.text('random'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('channel_header_topic')), findsNothing);
     });
 
     testWidgets('clicking a sidebar channel opens it in the chat area', (
@@ -296,7 +358,12 @@ void main() {
       tester,
     ) async {
       final repository = _LeavingChannelRepository(
-        const Failure(ApiFailure(message: 'You cannot leave this channel')),
+        const Failure(
+          ApiFailure(
+            message: 'You cannot leave this channel',
+            kind: ApiFailureKind.client,
+          ),
+        ),
       );
       await pumpSidebarAndChat(tester, repository: repository);
 
@@ -308,6 +375,128 @@ void main() {
       expect(find.text('You cannot leave this channel'), findsOneWidget);
       expect(find.text('# random'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
+    });
+
+    for (final (kind, expected) in [
+      (
+        ApiFailureKind.network,
+        'No internet connection. Check your network and try again.',
+      ),
+      (
+        ApiFailureKind.server,
+        'Something went wrong on our end. Please try again later.',
+      ),
+      (ApiFailureKind.unknown, 'Could not leave #random. Please try again.'),
+      (ApiFailureKind.parsing, 'Could not leave #random. Please try again.'),
+    ]) {
+      testWidgets('leave failure $kind shows safe copy and keeps the channel', (
+        tester,
+      ) async {
+        final repository = _LeavingChannelRepository(
+          Failure(
+            ApiFailure(
+              message: '<html>internal-host failure</html>',
+              kind: kind,
+            ),
+          ),
+        );
+        await pumpSidebarAndChat(tester, repository: repository);
+        await leaveRandom(tester);
+        await tester.tap(find.widgetWithText(TextButton, 'Leave'));
+        await tester.pumpAndSettle();
+        expect(find.text(expected), findsOneWidget);
+        expect(find.textContaining('internal-host'), findsNothing);
+        expect(find.text('# random'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      });
+    }
+
+    Future<void> archiveRandom(WidgetTester tester) async {
+      await tester.tap(find.text('random'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('channel-header-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archive channel'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('archiving a channel removes it and opens another one', (
+      tester,
+    ) async {
+      final repository = _ArchivingChannelRepository(const Success(null));
+      await pumpSidebarAndChat(tester, repository: repository);
+
+      await archiveRandom(tester);
+      expect(find.text('Archive #random?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Archive'));
+      await tester.pumpAndSettle();
+
+      expect(repository.archived, [('channel-random', true)]);
+      expect(find.text('random'), findsNothing);
+      expect(find.text('# general'), findsOneWidget);
+      expect(find.text('#random was archived'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('cancelling the archive dialog keeps the channel', (
+      tester,
+    ) async {
+      final repository = _ArchivingChannelRepository(const Success(null));
+      await pumpSidebarAndChat(tester, repository: repository);
+
+      await archiveRandom(tester);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(repository.archived, isEmpty);
+      expect(find.text('# random'), findsOneWidget);
+    });
+
+    testWidgets(
+      'a forbidden archive says who can do it and keeps the channel',
+      (tester) async {
+        final repository = _ArchivingChannelRepository(
+          const Failure(
+            ApiFailure(
+              message: 'unauthorized, only channel owner or channel manager',
+              kind: ApiFailureKind.forbidden,
+            ),
+          ),
+        );
+        await pumpSidebarAndChat(tester, repository: repository);
+
+        await archiveRandom(tester);
+        await tester.tap(find.widgetWithText(TextButton, 'Archive'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Only the channel owner or an admin can archive #random.'),
+          findsOneWidget,
+        );
+        expect(find.text('# random'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      },
+    );
+
+    testWidgets('the header menu exports the channel history (Ziki #2629)', (
+      tester,
+    ) async {
+      final repository = _ExportingChannelRepository();
+      await pumpSidebarAndChat(tester, repository: repository);
+      await tester.tap(find.text('random'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('channel-header-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Export history'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Export #random'), findsOneWidget);
+      expect(repository.exported, ['channel-random']);
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
     });
   });
 
@@ -362,6 +551,63 @@ void main() {
           tester.getSize(resizableSidebar).width,
           greaterThanOrEqualTo(ResizableSidebar.defaultMinWidth),
         );
+      },
+    );
+
+    testWidgets(
+      'reclamps width when minWidth or maxWidth changes in didUpdateWidget',
+      (tester) async {
+        await tester.pumpWidget(
+          buildTestMaterialApp(
+            const Scaffold(
+              body: ResizableSidebar(
+                initialWidth: 350,
+                minWidth: 200,
+                maxWidth: 400,
+                child: Text('Sidebar'),
+              ),
+            ),
+          ),
+        );
+
+        final resizableSidebar = find.byKey(
+          const ValueKey('resizable-sidebar'),
+        );
+        expect(tester.getSize(resizableSidebar).width, 350);
+
+        // Update widget with lower maxWidth: 300
+        await tester.pumpWidget(
+          buildTestMaterialApp(
+            const Scaffold(
+              body: ResizableSidebar(
+                initialWidth: 350,
+                minWidth: 200,
+                maxWidth: 300,
+                child: Text('Sidebar'),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.getSize(resizableSidebar).width, 300);
+
+        // Update widget with higher minWidth: 320
+        await tester.pumpWidget(
+          buildTestMaterialApp(
+            const Scaffold(
+              body: ResizableSidebar(
+                initialWidth: 350,
+                minWidth: 320,
+                maxWidth: 400,
+                child: Text('Sidebar'),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.getSize(resizableSidebar).width, 320);
       },
     );
   });

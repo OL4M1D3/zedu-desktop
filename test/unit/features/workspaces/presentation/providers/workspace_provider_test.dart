@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import '../../../../../helpers/helpers.dart';
+
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 class MockApiBaseService extends Mock implements ApiBaseService {}
+
+class MockSecureStorageService extends Mock implements SecureStorageService {}
 
 const _demoNames = [
   'HNG Workspace',
@@ -14,6 +19,7 @@ const _demoNames = [
 void main() {
   group('WorkspaceNotifier', () {
     late MockApiBaseService mockApi;
+    late MockSecureStorageService mockStorage;
 
     void registerConfig({required bool usesMockData}) {
       locator.registerSingleton<AppConfig>(
@@ -40,7 +46,12 @@ void main() {
 
     setUp(() {
       mockApi = MockApiBaseService();
+      mockStorage = MockSecureStorageService();
       locator.registerSingleton<ApiBaseService>(mockApi);
+      locator.registerSingleton<SecureStorageService>(mockStorage);
+      when(
+        () => mockStorage.replaceAccessToken(any()),
+      ).thenAnswer((_) async {});
     });
 
     tearDown(() async {
@@ -68,6 +79,21 @@ void main() {
 
       Future<ProviderContainer> loadedOnX() async {
         registerConfig(usesMockData: false);
+        // The server takes a moment to answer, as the old fixed delay did.
+        when(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: any(named: 'data'),
+          ),
+        ).thenAnswer((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          return ApiResponseModel(
+            data: {
+              'data': {'access_token': 'token'},
+            },
+            statusCode: 200,
+          );
+        });
         stubOrganisations([
           for (final workspace in [x, y, z])
             {'id': workspace.id, 'name': workspace.name},
@@ -262,6 +288,19 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       await loadWorkspaces(container);
+      when(
+        () => mockApi.put<Map<String, dynamic>>(
+          path: '/users/switch-org',
+          data: any(named: 'data'),
+        ),
+      ).thenAnswer(
+        (_) async => ApiResponseModel(
+          data: {
+            'data': {'access_token': 'token'},
+          },
+          statusCode: 200,
+        ),
+      );
       final notifier = container.read(workspaceProvider.notifier);
       await notifier.switchWorkspace(
         container.read(workspaceProvider).workspaces.last,
@@ -309,6 +348,181 @@ void main() {
       verifyNever(
         () => mockApi.get<Map<String, dynamic>>(path: any(named: 'path')),
       );
+    });
+
+    group('switchWorkspace', () {
+      const org1 = {'id': 'org-1', 'name': 'Riverside Academy', 'logo_url': ''};
+      const org2 = {'id': 'org-2', 'name': 'Cohort 13', 'logo_url': ''};
+
+      void stubSwitchOrg(Future<ApiResponseModel<Map<String, dynamic>>> reply) {
+        when(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: any(named: 'data'),
+          ),
+        ).thenAnswer((_) => reply);
+      }
+
+      ApiResponseModel<Map<String, dynamic>> tokenReply(Object? token) =>
+          ApiResponseModel(
+            data: {
+              'data': {'access_token': token},
+            },
+            statusCode: 200,
+          );
+
+      Future<ProviderContainer> twoWorkspaces() async {
+        registerConfig(usesMockData: false);
+        stubOrganisations([org1, org2]);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await loadWorkspaces(container);
+        return container;
+      }
+
+      test('asks the server to switch and keeps the new token', () async {
+        final container = await twoWorkspaces();
+        stubSwitchOrg(Future.value(tokenReply('token-2')));
+        final target = container.read(workspaceProvider).workspaces.last;
+
+        final error = await container
+            .read(workspaceProvider.notifier)
+            .switchWorkspace(target);
+
+        expect(error, isNull);
+        expect(
+          container.read(workspaceProvider).selectedWorkspace?.id,
+          'org-2',
+        );
+        expect(container.read(workspaceProvider).isLoading, isFalse);
+        verify(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: {'current_org': 'org-2'},
+          ),
+        ).called(1);
+        verify(() => mockStorage.replaceAccessToken('token-2')).called(1);
+      });
+
+      test('keeps the current workspace when the server refuses', () async {
+        final container = await twoWorkspaces();
+        stubSwitchOrg(Future.error(Exception('403')));
+        final target = container.read(workspaceProvider).workspaces.last;
+
+        final error = await container
+            .read(workspaceProvider.notifier)
+            .switchWorkspace(target);
+
+        expect(error, WorkspaceNotifier.switchErrorMessage);
+        expect(
+          container.read(workspaceProvider).selectedWorkspace?.id,
+          'org-1',
+        );
+        expect(container.read(workspaceProvider).isLoading, isFalse);
+        verifyNever(() => mockStorage.replaceAccessToken(any()));
+      });
+
+      test('treats a reply without a token as a failed switch', () async {
+        final container = await twoWorkspaces();
+        stubSwitchOrg(Future.value(tokenReply(null)));
+        final target = container.read(workspaceProvider).workspaces.last;
+
+        final error = await container
+            .read(workspaceProvider.notifier)
+            .switchWorkspace(target);
+
+        expect(error, WorkspaceNotifier.switchErrorMessage);
+        expect(
+          container.read(workspaceProvider).selectedWorkspace?.id,
+          'org-1',
+        );
+        verifyNever(() => mockStorage.replaceAccessToken(any()));
+      });
+
+      test('does nothing for the workspace that is already selected', () async {
+        final container = await twoWorkspaces();
+        final current = container.read(workspaceProvider).selectedWorkspace!;
+
+        final error = await container
+            .read(workspaceProvider.notifier)
+            .switchWorkspace(current);
+
+        expect(error, isNull);
+        verifyNever(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: any(named: 'path'),
+            data: any(named: 'data'),
+          ),
+        );
+      });
+
+      test('runs switches one after another and the newest one wins', () async {
+        final container = await twoWorkspaces();
+        final firstReply = Completer<ApiResponseModel<Map<String, dynamic>>>();
+        var calls = 0;
+        when(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: any(named: 'data'),
+          ),
+        ).thenAnswer(
+          (_) =>
+              ++calls == 1 ? firstReply.future : Future.value(tokenReply('t3')),
+        );
+        final notifier = container.read(workspaceProvider.notifier);
+        final target = container.read(workspaceProvider).workspaces.last;
+
+        final first = notifier.switchWorkspace(target);
+        final second = notifier.switchWorkspace(
+          const Workspace(id: 'org-3', name: 'Other', avatar: ''),
+        );
+        await pumpEventQueue();
+        // The first call revoked the token the second one would have sent, so
+        // the second waits for it.
+        verify(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: any(named: 'data'),
+          ),
+        ).called(1);
+
+        firstReply.complete(tokenReply('token-2'));
+        expect(await first, isNull);
+        expect(await second, isNull);
+
+        expect(
+          container.read(workspaceProvider).selectedWorkspace?.id,
+          'org-3',
+        );
+        expect(container.read(workspaceProvider).isLoading, isFalse);
+        verify(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: '/users/switch-org',
+            data: any(named: 'data'),
+          ),
+        ).called(1);
+      });
+
+      test('does not call the server in mock-data mode', () async {
+        registerConfig(usesMockData: true);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await loadWorkspaces(container);
+        final target = container.read(workspaceProvider).workspaces.last;
+
+        final error = await container
+            .read(workspaceProvider.notifier)
+            .switchWorkspace(target);
+
+        expect(error, isNull);
+        expect(container.read(workspaceProvider).selectedWorkspace, target);
+        verifyNever(
+          () => mockApi.put<Map<String, dynamic>>(
+            path: any(named: 'path'),
+            data: any(named: 'data'),
+          ),
+        );
+      });
     });
   });
 }

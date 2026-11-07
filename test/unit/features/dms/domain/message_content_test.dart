@@ -76,5 +76,34 @@ void main() {
         'See this now',
       );
     });
+    test(
+      'preserves typed text with angle brackets, generics, and comparisons',
+      () {
+        expect(
+          htmlMessageToMarkdown('Use List<String> here'),
+          'Use List<String> here',
+        );
+        expect(
+          htmlMessageToMarkdown('Call `Map<String, int> m` now'),
+          'Call `Map<String, int> m` now',
+        );
+        expect(
+          htmlMessageToMarkdown('wrap it in a <div> element'),
+          'wrap it in a <div> element',
+        );
+        expect(
+          htmlMessageToMarkdown('if a<b and c>d then'),
+          'if a<b and c>d then',
+        );
+        expect(
+          htmlMessageToMarkdown('Ada <ada@zedu.chat> wrote'),
+          'Ada <ada@zedu.chat> wrote',
+        );
+        expect(
+          htmlMessageToMarkdown('<T> is a generic type'),
+          '<T> is a generic type',
+        );
+      },
+    );
   });
 }

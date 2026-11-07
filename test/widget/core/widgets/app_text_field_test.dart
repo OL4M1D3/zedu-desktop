@@ -140,4 +140,113 @@ void main() {
       expect(decoration.focusedErrorBorder, isNotNull);
     });
   });
+
+  group('AppTextField obscureText sync (ziki-2764)', () {
+    testWidgets(
+      'syncs obscureText when isPassword changes from false to true',
+      (tester) async {
+        final controller = TextEditingController(text: 'secret123');
+        addTearDown(controller.dispose);
+
+        Widget buildWidget(bool isPassword) {
+          return buildTestMaterialApp(
+            Scaffold(
+              body: AppTextField(
+                controller: controller,
+                hint: 'Field',
+                isPassword: isPassword,
+              ),
+            ),
+          );
+        }
+
+        await tester.pumpWidget(buildWidget(false));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isFalse,
+        );
+
+        // Change isPassword to true on existing widget
+        await tester.pumpWidget(buildWidget(true));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isTrue,
+        );
+      },
+    );
+
+    testWidgets(
+      'syncs obscureText when isPassword changes from true to false',
+      (tester) async {
+        final controller = TextEditingController(text: 'secret123');
+        addTearDown(controller.dispose);
+
+        Widget buildWidget(bool isPassword) {
+          return buildTestMaterialApp(
+            Scaffold(
+              body: AppTextField(
+                controller: controller,
+                hint: 'Field',
+                isPassword: isPassword,
+              ),
+            ),
+          );
+        }
+
+        await tester.pumpWidget(buildWidget(true));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isTrue,
+        );
+
+        // Change isPassword to false on existing widget
+        await tester.pumpWidget(buildWidget(false));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isFalse,
+        );
+      },
+    );
+
+    testWidgets(
+      'preserves visibility toggle state when isPassword does not change',
+      (tester) async {
+        final controller = TextEditingController(text: 'secret123');
+        addTearDown(controller.dispose);
+
+        Widget buildWidget({required String hint}) {
+          return buildTestMaterialApp(
+            Scaffold(
+              body: AppTextField(
+                controller: controller,
+                hint: hint,
+                isPassword: true,
+              ),
+            ),
+          );
+        }
+
+        await tester.pumpWidget(buildWidget(hint: 'Hint 1'));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isTrue,
+        );
+
+        // Tap toggle button to show password
+        await tester.tap(find.byTooltip('Show password'));
+        await tester.pump();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isFalse,
+        );
+
+        // Rebuild with same isPassword: true but different hint
+        await tester.pumpWidget(buildWidget(hint: 'Hint 2'));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).obscureText,
+          isFalse,
+        );
+      },
+    );
+  });
 }

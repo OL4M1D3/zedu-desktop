@@ -2,20 +2,26 @@ import 'dart:io';
 
 import 'package:zedu/core/core.dart';
 
-/// Downloads [url] and saves it as [fileName]. Returns whether the file was
-/// saved, so tests can replace the platform picker and network call.
-typedef ImageDownloadCallback =
-    Future<bool> Function(String url, String fileName);
+/// Asks where to save [fileName]. Returns the chosen path, or null when the
+/// user cancels, so tests can replace the platform save dialog.
+typedef ImageSavePathPicker = Future<String?> Function(String fileName);
+
+/// Downloads [url] and writes it to [path]. Returns whether the file was
+/// saved, so tests can replace the network call and file write.
+typedef ImageDownloadCallback = Future<bool> Function(String url, String path);
 
 /// Full-screen viewer for an image attachment.
 ///
 /// The attachment is shown over a dark backdrop and can be zoomed, rotated and
-/// saved. Pass [onDownload] in tests to avoid opening the platform save dialog.
+/// saved. Saving asks for the path first and only then downloads the image.
+/// Pass [onPickSavePath] and [onDownload] in tests to avoid opening the
+/// platform save dialog or hitting the network.
 class ImageAttachmentViewer extends StatefulWidget {
   const ImageAttachmentViewer({
     super.key,
     required this.imageUrl,
     required this.fileName,
+    this.onPickSavePath,
     this.onDownload,
   });
 
@@ -24,6 +30,8 @@ class ImageAttachmentViewer extends StatefulWidget {
 
   /// Name used for the save dialog and the viewer title.
   final String fileName;
+
+  final ImageSavePathPicker? onPickSavePath;
 
   final ImageDownloadCallback? onDownload;
 
@@ -37,22 +45,49 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
 
   final _transformationController = TransformationController();
   double _scale = 1;
+  Size _viewportSize = Size.zero;
   int _quarterTurns = 0;
   bool _saving = false;
 
   bool get _isNetwork => widget.imageUrl.startsWith('http');
 
   @override
+  void initState() {
+    super.initState();
+    _transformationController.addListener(_syncScale);
+  }
+
+  @override
   void dispose() {
+    _transformationController.removeListener(_syncScale);
     _transformationController.dispose();
     super.dispose();
   }
 
+  /// Keeps [_scale] in step with the viewer, so the buttons also see zoom
+  /// from the mouse wheel, trackpad or pinch.
+  void _syncScale() {
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    if ((scale - _scale).abs() < 0.0001) return;
+    setState(() => _scale = scale);
+  }
+
+  /// Zooms by [factor] around the middle of the viewer, keeping any pan.
   void _zoomBy(double factor) {
-    final next = (_scale * factor).clamp(_minScale, _maxScale);
-    if (next == _scale) return;
-    _transformationController.value = Matrix4.diagonal3Values(next, next, 1);
-    setState(() => _scale = next);
+    final matrix = _transformationController.value;
+    final current = matrix.getMaxScaleOnAxis();
+    final next = (current * factor).clamp(_minScale, _maxScale);
+    if ((next - current).abs() < 0.0001) return;
+    final ratio = next / current;
+    final center = _viewportSize.center(Offset.zero);
+    final translation = matrix.getTranslation();
+    // A point p on screen maps to p' = center + ratio * (p - center), so the
+    // point under the middle of the viewer stays where it is.
+    _transformationController.value = Matrix4.identity()
+      ..setEntry(0, 0, next)
+      ..setEntry(1, 1, next)
+      ..setEntry(0, 3, center.dx + ratio * (translation.x - center.dx))
+      ..setEntry(1, 3, center.dy + ratio * (translation.y - center.dy));
   }
 
   void _rotate() {
@@ -62,10 +97,20 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
+    final pickPath = widget.onPickSavePath ?? _pickSavePath;
     final download = widget.onDownload ?? _download;
-    final saved = await download(widget.imageUrl, widget.fileName);
+    // Ask for the path first so the dialog opens straight away; null means
+    // the user cancelled, which is not an error.
+    bool? saved;
+    try {
+      final path = await pickPath(widget.fileName);
+      if (path != null) saved = await download(widget.imageUrl, path);
+    } catch (_) {
+      saved = false;
+    }
     if (!mounted) return;
     setState(() => _saving = false);
+    if (saved == null) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -79,16 +124,18 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
       );
   }
 
-  Future<bool> _download(String url, String fileName) async {
+  Future<String?> _pickSavePath(String fileName) {
+    return FilePicker.saveFile(
+      dialogTitle: 'Save image',
+      fileName: fileName,
+      type: FileType.image,
+    );
+  }
+
+  Future<bool> _download(String url, String path) async {
     try {
       final bytes = await _readBytes(url);
       if (bytes.isEmpty) return false;
-      final path = await FilePicker.saveFile(
-        dialogTitle: 'Save image',
-        fileName: fileName,
-        type: FileType.image,
-      );
-      if (path == null) return false;
       await File(path).writeAsBytes(bytes);
       return true;
     } catch (_) {
@@ -142,16 +189,21 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: InteractiveViewer(
-                transformationController: _transformationController,
-                minScale: _minScale,
-                maxScale: _maxScale,
-                child: Center(
-                  child: RotatedBox(
-                    quarterTurns: _quarterTurns,
-                    child: _buildImage(colors),
-                  ),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _viewportSize = constraints.biggest;
+                  return InteractiveViewer(
+                    transformationController: _transformationController,
+                    minScale: _minScale,
+                    maxScale: _maxScale,
+                    child: Center(
+                      child: RotatedBox(
+                        quarterTurns: _quarterTurns,
+                        child: _buildImage(colors),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             Positioned(

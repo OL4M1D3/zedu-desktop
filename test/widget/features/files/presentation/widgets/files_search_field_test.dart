@@ -108,4 +108,111 @@ void main() {
 
     expect(fieldText(tester), 'budget');
   });
+
+  testWidgets('shows the active sort order after it is selected', (
+    tester,
+  ) async {
+    await pumpToolbar(tester);
+
+    await tester.tap(find.byTooltip('Sort'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Oldest to newest').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Oldest to newest'), findsOneWidget);
+  });
+
+  testWidgets(
+    'shows clear button only when field has text and hides when empty',
+    (tester) async {
+      await pumpToolbar(tester);
+      expect(find.byTooltip('Clear search'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'budget');
+      await tester.pump();
+      expect(find.byTooltip('Clear search'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pump();
+      expect(find.byTooltip('Clear search'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'tapping clear button empties input and updates search immediately',
+    (tester) async {
+      await pumpToolbar(tester);
+      await tester.enterText(find.byType(TextField), 'budget');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(search(), 'budget');
+
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pump();
+
+      expect(fieldText(tester), isEmpty);
+      expect(search(), isEmpty);
+      expect(find.byTooltip('Clear search'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'clearing search leaves type and date modified filters unchanged',
+    (tester) async {
+      await pumpToolbar(tester);
+      container.read(filesProvider.notifier).setCategory(FileCategory.images);
+      container
+          .read(filesProvider.notifier)
+          .setDateModified(DateModifiedFilter.last30Days);
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), 'report');
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(container.read(filesProvider).category, FileCategory.images);
+      expect(
+        container.read(filesProvider).dateModified,
+        DateModifiedFilter.last30Days,
+      );
+      expect(container.read(filesProvider).search, 'report');
+      expect(find.byTooltip('Clear search'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pump();
+
+      expect(container.read(filesProvider).search, isEmpty);
+      expect(container.read(filesProvider).category, FileCategory.images);
+      expect(
+        container.read(filesProvider).dateModified,
+        DateModifiedFilter.last30Days,
+      );
+    },
+  );
+
+  testWidgets('clear icon uses design system colors and accessible tooltip', (
+    tester,
+  ) async {
+    await pumpToolbar(tester);
+    final colors = tester.element(find.byType(FilesToolbar)).colors;
+
+    await tester.enterText(find.byType(TextField), 'query');
+    await tester.pump();
+
+    final iconFinder = find.widgetWithIcon(IconButton, Icons.close);
+    expect(iconFinder, findsOneWidget);
+    final icon = tester.widget<Icon>(
+      find.descendant(of: iconFinder, matching: find.byType(Icon)),
+    );
+    expect(icon.color, colors.textHint);
+    expect(icon.size, 16);
+  });
+
+  testWidgets('normal typing preserves debounce behavior', (tester) async {
+    await pumpToolbar(tester);
+    await tester.enterText(find.byType(TextField), 'notes');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(search(), isEmpty);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(search(), 'notes');
+  });
 }

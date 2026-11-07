@@ -1,5 +1,8 @@
 import 'package:zedu/core/core.dart';
 
+/// Sentinel value representing a profile field that was not modified by the user.
+const String kUnchangedField = '\u0000UNCHANGED\u0000';
+
 class ProfileAccount {
   const ProfileAccount({
     required this.name,

@@ -35,6 +35,7 @@ class UserManagementSection extends StatefulWidget {
 
 class _UserManagementSectionState extends State<UserManagementSection> {
   final _searchController = TextEditingController();
+  final _pageJumpController = TextEditingController();
   String _roleFilter = 'All Roles';
   int _currentPage = 1;
   static const int _pageSize = 10;
@@ -43,7 +44,21 @@ class _UserManagementSectionState extends State<UserManagementSection> {
   @override
   void dispose() {
     _searchController.dispose();
+    _pageJumpController.dispose();
     super.dispose();
+  }
+
+  void _jumpToPage(String value, int totalPages) {
+    final page = int.tryParse(value.trim());
+    if (page != null) {
+      final clamped = page.clamp(1, totalPages);
+      setState(() {
+        _currentPage = clamped;
+      });
+      _pageJumpController.text = '$clamped';
+    } else {
+      _pageJumpController.text = '$_currentPage';
+    }
   }
 
   @override
@@ -91,6 +106,18 @@ class _UserManagementSectionState extends State<UserManagementSection> {
             onPressed: () => _showInviteDialog(context, widget.onInvite),
           ),
         ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: widget.isSaving
+              ? null
+              : () => showDialog<void>(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const BulkInviteDialog(),
+                ),
+          icon: const Icon(Icons.group_add_outlined),
+          label: const Text('Invite multiple people'),
+        ),
         const SizedBox(height: 34),
         Row(
           children: [
@@ -103,6 +130,7 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                   setState(() {
                     _currentTab = _UserManagementTab.members;
                     _currentPage = 1;
+                    _pageJumpController.text = '1';
                   });
                 }
               },
@@ -117,6 +145,7 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                   setState(() {
                     _currentTab = _UserManagementTab.invites;
                     _currentPage = 1;
+                    _pageJumpController.text = '1';
                   });
                 }
               },
@@ -139,6 +168,7 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                           controller: _searchController,
                           onChanged: (_) => setState(() {
                             _currentPage = 1;
+                            _pageJumpController.text = '1';
                           }),
                           decoration: InputDecoration(
                             hintText: 'Search by name or email',
@@ -168,6 +198,7 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                         onChanged: (value) => setState(() {
                           _roleFilter = value ?? 'All Roles';
                           _currentPage = 1;
+                          _pageJumpController.text = '1';
                         }),
                       ),
                     ],
@@ -297,16 +328,94 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                           height: 36,
                           disabled: currentPage <= 1,
                           onPressed: currentPage > 1
-                              ? () => setState(
-                                  () => _currentPage = currentPage - 1,
-                                )
+                              ? () {
+                                  final prev = currentPage - 1;
+                                  setState(() => _currentPage = prev);
+                                  _pageJumpController.text = '$prev';
+                                }
                               : null,
                         ),
                         const Spacer(),
-                        Text(
-                          '$currentPage',
-                          key: const Key('user_management_page_number'),
-                          style: context.textTheme.bodySmall,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$currentPage',
+                              key: const Key('user_management_page_number'),
+                              style: context.textTheme.bodySmall,
+                            ),
+                            Text(
+                              ' of $totalPages',
+                              style: context.textTheme.bodySmall?.copyWith(
+                                color: context.colors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              'Go to page:',
+                              style: context.textTheme.bodySmall?.copyWith(
+                                color: context.colors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 52,
+                              height: 36,
+                              child: TextField(
+                                key: const Key(
+                                  'user_management_page_jump_input',
+                                ),
+                                controller: _pageJumpController,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                style: context.textTheme.bodySmall,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 6,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                      color: context.colors.divider,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                      color: context.colors.divider,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                      color: context.colors.primary,
+                                    ),
+                                  ),
+                                  hintText: '$currentPage',
+                                  hintStyle: context.textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: context.colors.textHint,
+                                      ),
+                                ),
+                                onSubmitted: (val) =>
+                                    _jumpToPage(val, totalPages),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            AppButton.outlined(
+                              key: const Key(
+                                'user_management_page_jump_button',
+                              ),
+                              label: 'Go',
+                              expand: false,
+                              height: 36,
+                              onPressed: () => _jumpToPage(
+                                _pageJumpController.text,
+                                totalPages,
+                              ),
+                            ),
+                          ],
                         ),
                         const Spacer(),
                         AppButton.outlined(
@@ -315,9 +424,11 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                           height: 36,
                           disabled: currentPage >= totalPages,
                           onPressed: currentPage < totalPages
-                              ? () => setState(
-                                  () => _currentPage = currentPage + 1,
-                                )
+                              ? () {
+                                  final next = currentPage + 1;
+                                  setState(() => _currentPage = next);
+                                  _pageJumpController.text = '$next';
+                                }
                               : null,
                         ),
                       ],
@@ -413,6 +524,7 @@ class _UserManagementSectionState extends State<UserManagementSection> {
                                         context,
                                         invite.email,
                                         () async => widget.onRemove(invite.id),
+                                        pendingInvite: true,
                                       ),
                                     ),
                                   ],
@@ -444,12 +556,15 @@ class _UserManagementSectionState extends State<UserManagementSection> {
   Future<void> _confirmRemove(
     BuildContext context,
     String email,
-    Future<void> Function() onConfirm,
-  ) => showProfileConfirmDialog(
+    Future<void> Function() onConfirm, {
+    bool pendingInvite = false,
+  }) => showProfileConfirmDialog(
     context,
-    title: 'Remove team member?',
-    message: '$email will lose access to this organization.',
-    confirmLabel: 'Remove member',
+    title: pendingInvite ? 'Remove invitation?' : 'Remove team member?',
+    message: pendingInvite
+        ? 'The invitation to $email will be cancelled. They will not join this organization.'
+        : '$email will lose access to this organization.',
+    confirmLabel: pendingInvite ? 'Remove invite' : 'Remove member',
     onConfirm: onConfirm,
     destructive: true,
   );
@@ -482,7 +597,7 @@ class _TabLabel extends StatelessWidget {
                   fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                   color: active
                       ? context.colors.primary
-                      : const Color(0xFF6B7280),
+                      : context.colors.textSecondary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -490,8 +605,8 @@ class _TabLabel extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: active
-                      ? const Color(0xFFE9E9FF)
-                      : const Color(0xFFF3F4F6),
+                      ? context.colors.primaryBg
+                      : context.colors.divider,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -499,7 +614,7 @@ class _TabLabel extends StatelessWidget {
                   style: context.textTheme.labelSmall?.copyWith(
                     color: active
                         ? context.colors.primary
-                        : const Color(0xFF6B7280),
+                        : context.colors.textSecondary,
                     fontSize: 10,
                   ),
                 ),

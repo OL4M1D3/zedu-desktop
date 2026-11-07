@@ -71,6 +71,11 @@ class _FakeAuthNotifier extends AuthNotifier {
   );
 }
 
+class _EmptyDmListNotifier extends DmListNotifier {
+  @override
+  Future<List<DmConversation>> build() async => const [];
+}
+
 /// Hovers People in the real rail and returns how many times the profile was
 /// reloaded.
 Future<int> _hoverPeopleAndCountLoads(
@@ -88,6 +93,7 @@ Future<int> _hoverPeopleAndCountLoads(
       overrides: [
         userProfileNotifierProvider.overrideWith(() => notifier),
         authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
+        dmListProvider.overrideWith(_EmptyDmListNotifier.new),
       ],
       child: buildTestMaterialApp(
         const Scaffold(

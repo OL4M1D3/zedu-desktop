@@ -26,10 +26,12 @@ class NotificationsSection extends StatefulWidget {
   final double maxContentWidth;
 
   @override
-  State<NotificationsSection> createState() => _NotificationsSectionState();
+  State<NotificationsSection> createState() => NotificationsSectionState();
 }
 
-class _NotificationsSectionState extends State<NotificationsSection> {
+enum _LeaveChoice { save, discard, cancel }
+
+class NotificationsSectionState extends State<NotificationsSection> {
   late NotificationPreferences _saved;
   late NotificationPreferences _draft;
 
@@ -65,6 +67,53 @@ class _NotificationsSectionState extends State<NotificationsSection> {
   Future<void> _save() async {
     if (!_canSave) return;
     await widget.onSave(_draft);
+  }
+
+  /// Whether the user may leave this section. With unsaved changes it asks
+  /// first: Save keeps them, Discard drops them, Cancel stays on the page.
+  Future<bool> confirmLeave() async {
+    if (!_hasChanges) return true;
+    final choice = await showDialog<_LeaveChoice>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unsaved changes'),
+        content: const Text(
+          'You have unsaved notification changes. Save them before leaving?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, _LeaveChoice.cancel),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, _LeaveChoice.discard),
+            style: TextButton.styleFrom(
+              foregroundColor: dialogContext.colors.error,
+            ),
+            child: const Text('Discard'),
+          ),
+          TextButton(
+            onPressed: _canSave
+                ? () => Navigator.pop(dialogContext, _LeaveChoice.save)
+                : null,
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    switch (choice) {
+      case _LeaveChoice.discard:
+        return true;
+      case _LeaveChoice.save:
+        await _save();
+        // The new baseline reaches this widget on the next frame. A failed
+        // save leaves the edits in place, so the user stays on the page.
+        await WidgetsBinding.instance.endOfFrame;
+        return mounted && !_hasChanges;
+      case _LeaveChoice.cancel:
+      case null:
+        return false;
+    }
   }
 
   @override

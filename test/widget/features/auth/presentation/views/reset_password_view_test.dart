@@ -223,4 +223,46 @@ void main() {
       expect(hasFocus(tester, 0), isTrue);
     });
   });
+
+  group('ResetPasswordView code boxes', () {
+    List<String> codeDigits(WidgetTester tester) => tester
+        .widgetList<TextFormField>(find.byType(TextFormField))
+        .take(6)
+        .map((field) => field.controller!.text)
+        .toList();
+
+    testWidgets(
+      'Backspace walks back through the boxes and clears each digit',
+      (tester) async {
+        await tester.pumpWidget(buildResetPasswordViewUnderTest());
+        final boxes = find.byType(TextFormField);
+        await tester.enterText(boxes.at(0), '1');
+        await tester.enterText(boxes.at(1), '2');
+        await tester.enterText(boxes.at(2), '3');
+        expect(codeDigits(tester), ['1', '2', '3', '', '', '']);
+
+        // Focus now sits on the empty fourth box.
+        for (var i = 0; i < 4; i++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+          await tester.pump();
+        }
+
+        expect(codeDigits(tester), ['', '', '', '', '', '']);
+      },
+    );
+
+    testWidgets('Backspace in the first empty box does nothing', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildResetPasswordViewUnderTest());
+      await tester.tap(find.byType(TextFormField).at(0));
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+
+      expect(codeDigits(tester), ['', '', '', '', '', '']);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

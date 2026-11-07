@@ -57,4 +57,15 @@ void main() {
       expect(StatusTimeout.dontRemove.expiryFrom(now), isNull);
     });
   });
+
+  group('StatusTimeout.apiValue', () {
+    test('uses backend-accepted API values and matches web contract', () {
+      expect(StatusTimeout.thirtyMinutes.apiValue, '30 minutes');
+      expect(StatusTimeout.oneHour.apiValue, '1 hour');
+      expect(StatusTimeout.today.apiValue, 'today');
+      expect(StatusTimeout.thisWeek.apiValue, 'this week');
+      // Backend ParseStatusExpiry accepts "dont-clear", rejecting "don't remove"
+      expect(StatusTimeout.dontRemove.apiValue, 'dont-clear');
+    });
+  });
 }

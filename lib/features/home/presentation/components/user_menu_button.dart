@@ -8,6 +8,9 @@ class UserMenuButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final menuState = ref.watch<UserMenuState>(userMenuStateProvider);
+    final notificationsPaused = ref.watch(
+      notificationSettingsProvider.select((settings) => settings.isDndActive),
+    );
 
     return GestureDetector(
       onTap: () {
@@ -43,6 +46,29 @@ class UserMenuButton extends ConsumerWidget {
               ),
             ),
           ),
+          if (notificationsPaused)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Tooltip(
+                message: 'Notifications paused',
+                child: Container(
+                  key: const ValueKey('user_menu_paused_badge'),
+                  width: 17,
+                  height: 17,
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: colors.sidebar, width: 1.5),
+                  ),
+                  child: Icon(
+                    Icons.notifications_off_outlined,
+                    size: 11,
+                    color: colors.primary,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

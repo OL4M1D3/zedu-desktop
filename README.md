@@ -105,12 +105,11 @@ Rules:
 
 ## Configuration
 
-Env keys are read from **dotenv** after `loadAppEnv()` in `main.dart`. The repo bundles **`.env.example`** and a local **`.env`** as Flutter assets. `.env` is gitignored, so create it from the template before you run or build.
+Env keys are read from **dotenv** after `loadAppEnv()` in `main.dart`. The repo bundles the tracked **`.env.example`** as a Flutter asset, so a fresh clone builds and runs without creating a local `.env`. `loadAppEnv()` still prefers `.env` when it is present in the asset bundle, then falls back to `.env.example`.
 
-`loadAppEnv()` tries `.env` first, then `.env.example`. Both `.env` and `.env.example` are listed under `flutter.assets` in `pubspec.yaml`, so a build fails with `No file or variants found for asset: .env` when `.env` is missing. Create `.env` from `.env.example` before `flutter run` or `flutter build`.
-
-1. Copy `.env.example` to `.env`, then edit values in `.env` for local overrides (avoid committing secrets).
-2. Prefer CI variables or `--dart-define` for production secrets.
+1. Edit `.env.example` for values that should ship with the repo.
+2. Prefer CI variables or `--dart-define` for local or production overrides (avoid committing secrets).
+3. If you need a local `.env`, add it back to `flutter.assets` in `pubspec.yaml`; it then takes precedence over `.env.example`.
 
 ```txt
 API_BASE_URL=https://api.staging.zedu.chat/api/v1/
@@ -145,24 +144,14 @@ cd zedu-desktop
 
 ## Quick start
 
-Create `.env` from the template first. The build needs this file.
-
-```sh
-cp .env.example .env
-```
-
-Windows (PowerShell):
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Then get the packages and run the app:
+A fresh clone needs no env file: the tracked `.env.example` is bundled automatically.
 
 ```sh
 flutter pub get
 flutter run
 ```
+
+For local overrides, pass `--dart-define` values (see [Overrides for CI or release builds](#overrides-for-ci-or-release-builds)).
 
 ## Running on Windows(locally)
 

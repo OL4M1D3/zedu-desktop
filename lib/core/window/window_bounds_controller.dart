@@ -7,17 +7,33 @@ import 'package:zedu/core/core.dart';
 /// The size below which the sidebar, message list and composer stop fitting.
 const kMinimumWindowSize = Size(960, 600);
 
-const _boundsStorageKey = 'window_bounds';
+const _boundsKeyPrefix = 'window_bounds.';
+const _lastDisplayKey = 'window_bounds.last_display';
 
-/// How much of the title bar must be on a display for the window to be
-/// reachable: enough to grab it with the mouse.
-const _minVisibleTitleBar = Size(120, 32);
+/// The key bounds were saved under before they were kept per display.
+const _legacyBoundsKey = 'window_bounds';
+
+/// A display's identity and the area a window may occupy on it.
+class WindowDisplay {
+  const WindowDisplay({required this.id, required this.area});
+
+  final String id;
+  final Rect area;
+}
 
 class SavedWindowBounds {
-  const SavedWindowBounds({required this.rect, required this.isMaximized});
+  const SavedWindowBounds({
+    required this.rect,
+    required this.isMaximized,
+    this.displayId,
+  });
 
   final Rect rect;
   final bool isMaximized;
+
+  /// The display the window was last used on. Null in values saved before
+  /// bounds were kept per display.
+  final String? displayId;
 
   String toJson() => jsonEncode({
     'x': rect.left,
@@ -25,6 +41,7 @@ class SavedWindowBounds {
     'width': rect.width,
     'height': rect.height,
     'maximized': isMaximized,
+    if (displayId != null) 'displayId': displayId,
   });
 
   /// Returns null for anything that is not a complete saved value.
@@ -32,6 +49,7 @@ class SavedWindowBounds {
     if (raw == null) return null;
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
+      final displayId = json['displayId'];
       return SavedWindowBounds(
         rect: Rect.fromLTWH(
           (json['x'] as num).toDouble(),
@@ -40,6 +58,9 @@ class SavedWindowBounds {
           (json['height'] as num).toDouble(),
         ),
         isMaximized: json['maximized'] as bool? ?? false,
+        displayId: displayId is String && displayId.isNotEmpty
+            ? displayId
+            : null,
       );
     } catch (_) {
       return null;
@@ -47,46 +68,53 @@ class SavedWindowBounds {
   }
 }
 
-/// Whether enough of the window's title bar is on one of [displays] to reach
-/// it, so a monitor that was disconnected can't strand the window.
-bool isWindowReachable(Rect bounds, List<Rect> displays) {
-  final titleBar = Rect.fromLTWH(
-    bounds.left,
-    bounds.top,
-    bounds.width,
-    _minVisibleTitleBar.height,
-  );
-  return displays.any((display) {
-    final visible = titleBar.intersect(display);
-    return visible.width >= _minVisibleTitleBar.width &&
-        visible.height >= _minVisibleTitleBar.height;
-  });
+/// Fits [bounds] onto [display]: the size is kept whenever it fits and is
+/// shrunk only when the window is larger than the display.
+Rect clampBoundsToDisplay(Rect bounds, Rect display) {
+  final minWidth = display.width < kMinimumWindowSize.width
+      ? display.width
+      : kMinimumWindowSize.width;
+  final minHeight = display.height < kMinimumWindowSize.height
+      ? display.height
+      : kMinimumWindowSize.height;
+  final width = bounds.width.clamp(minWidth, display.width).toDouble();
+  final height = bounds.height.clamp(minHeight, display.height).toDouble();
+  final left = bounds.left
+      .clamp(display.left, display.right - width)
+      .toDouble();
+  final top = bounds.top.clamp(display.top, display.bottom - height).toDouble();
+  return Rect.fromLTWH(left, top, width, height);
 }
 
-Future<List<Rect>> _readDisplayAreas() async {
+Future<List<WindowDisplay>> _readDisplays() async {
   final displays = await screenRetriever.getAllDisplays();
   return [
     for (final display in displays)
-      (display.visiblePosition ?? Offset.zero) &
-          (display.visibleSize ?? display.size),
+      WindowDisplay(
+        id: display.id,
+        area:
+            (display.visiblePosition ?? Offset.zero) &
+            (display.visibleSize ?? display.size),
+      ),
   ];
 }
 
-/// Enforces the minimum window size and remembers where the window was left.
+/// Enforces the minimum window size and remembers where the window was left,
+/// per display, so it reopens on the monitor it was last used on.
 class WindowBoundsController with WindowListener {
   WindowBoundsController({
     required WindowManager window,
     required SecureStorageService storage,
-    Future<List<Rect>> Function() displayAreas = _readDisplayAreas,
+    Future<List<WindowDisplay>> Function() displays = _readDisplays,
     Duration saveDelay = const Duration(milliseconds: 500),
   }) : _window = window,
        _storage = storage,
-       _displayAreas = displayAreas,
+       _displays = displays,
        _saveDelay = saveDelay;
 
   final WindowManager _window;
   final SecureStorageService _storage;
-  final Future<List<Rect>> Function() _displayAreas;
+  final Future<List<WindowDisplay>> Function() _displays;
   final Duration _saveDelay;
 
   Timer? _saveTimer;
@@ -100,19 +128,66 @@ class WindowBoundsController with WindowListener {
   Future<void> restore() async {
     try {
       await _window.setMinimumSize(kMinimumWindowSize);
-      final saved = SavedWindowBounds.tryParse(
-        await _storage.readData(_boundsStorageKey),
-      );
-      if (saved != null &&
-          isWindowReachable(saved.rect, await _displayAreas())) {
-        _normalBounds = saved.rect;
-        await _window.setBounds(saved.rect);
+      final displays = await _displays();
+      final saved = await _readSavedBounds();
+      final display = saved == null ? null : _displayForSaved(saved, displays);
+      if (saved != null && display != null) {
+        final bounds = clampBoundsToDisplay(saved.rect, display.area);
+        _normalBounds = bounds;
+        await _window.setBounds(bounds);
         if (saved.isMaximized) await _window.maximize();
       }
     } catch (error) {
       debugPrint('Failed to restore window bounds: $error');
     }
     _window.addListener(this);
+  }
+
+  /// Reads the bounds kept for the display used last, falling back to the one
+  /// value saved before bounds were kept per display.
+  Future<SavedWindowBounds?> _readSavedBounds() async {
+    final lastDisplay = await _storage.readData(_lastDisplayKey);
+    if (lastDisplay != null && lastDisplay.isNotEmpty) {
+      final saved = SavedWindowBounds.tryParse(
+        await _storage.readData('$_boundsKeyPrefix$lastDisplay'),
+      );
+      if (saved != null) return saved;
+    }
+    return SavedWindowBounds.tryParse(
+      await _storage.readData(_legacyBoundsKey),
+    );
+  }
+
+  static WindowDisplay? _displayForSaved(
+    SavedWindowBounds saved,
+    List<WindowDisplay> displays,
+  ) {
+    for (final display in displays) {
+      if (display.id == saved.displayId) return display;
+    }
+    // A per-display value whose display is gone falls back to the default
+    // window; only an old single value is placed by where it was.
+    if (saved.displayId != null) return null;
+    return _displayForBounds(saved.rect, displays);
+  }
+
+  static WindowDisplay? _displayForBounds(
+    Rect bounds,
+    List<WindowDisplay> displays,
+  ) {
+    WindowDisplay? best;
+    var bestArea = 0.0;
+    for (final display in displays) {
+      final overlap = bounds.intersect(display.area);
+      final area = overlap.width > 0 && overlap.height > 0
+          ? overlap.width * overlap.height
+          : 0.0;
+      if (best == null || area > bestArea) {
+        best = display;
+        bestArea = area;
+      }
+    }
+    return bestArea > 0 ? best : null;
   }
 
   void _scheduleSave() {
@@ -128,13 +203,18 @@ class WindowBoundsController with WindowListener {
       final isMaximized = await _window.isMaximized();
       final bounds = await _window.getBounds();
       if (!isMaximized) _normalBounds = bounds;
+      final rect = _normalBounds ?? bounds;
+      final display = _displayForBounds(rect, await _displays());
+      if (display == null) return;
       await _storage.writeData(
-        _boundsStorageKey,
+        '$_boundsKeyPrefix${display.id}',
         SavedWindowBounds(
-          rect: _normalBounds ?? bounds,
+          rect: rect,
           isMaximized: isMaximized,
+          displayId: display.id,
         ).toJson(),
       );
+      await _storage.writeData(_lastDisplayKey, display.id);
     } catch (error) {
       debugPrint('Failed to save window bounds: $error');
     }

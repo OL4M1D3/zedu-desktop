@@ -2,36 +2,22 @@ import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
-
-class _FakeRingtone implements CallRingtone {
-  final calls = <String>[];
-
-  @override
-  Future<void> start() async => calls.add('start');
-
-  @override
-  Future<void> stop() async => calls.add('stop');
-
-  @override
-  Future<void> dispose() async => calls.add('dispose');
-}
-
-class _FakeBuzzRepository extends BuzzRepository {
-  @override
-  Future<bool> respondToInvitation(String buzzId, bool accept) async => true;
-}
+import '../../fakes/buzz_call_fakes.dart';
 
 void main() {
   group('Incoming call ringtone (Ziki #2441)', () {
-    late _FakeRingtone ringtone;
+    late FakeRingtone ringtone;
     late ProviderContainer container;
 
     setUp(() {
-      ringtone = _FakeRingtone();
+      ringtone = FakeRingtone();
       container = ProviderContainer(
         overrides: [
           callRingtoneProvider.overrideWithValue(ringtone),
-          buzzRepositoryProvider.overrideWithValue(_FakeBuzzRepository()),
+          buzzRepositoryProvider.overrideWithValue(FakeBuzzCallRepository()),
+          buzzCallServiceProvider.overrideWithValue(FakeBuzzCallService()),
+          callSignalingProvider.overrideWithValue(FakeCallSignaling()),
+          authNotifierProvider.overrideWith(FakeSignedInAuthNotifier.new),
         ],
       );
       addTearDown(container.dispose);
@@ -57,7 +43,7 @@ void main() {
       ring();
       await calls().acceptCall();
 
-      expect(calls().state.status, CallStatus.active);
+      expect(calls().state.status, CallStatus.connecting);
       expect(ringtone.calls, ['start', 'stop']);
     });
 
@@ -65,13 +51,13 @@ void main() {
       ring();
       await calls().declineCall();
 
-      expect(calls().state.status, CallStatus.none);
+      expect(calls().state.status, CallStatus.ended);
       expect(ringtone.calls, ['start', 'stop']);
     });
 
-    test('the call ending (caller hung up or timed out) stops it', () {
+    test('the call ending (caller hung up or timed out) stops it', () async {
       ring();
-      calls().endCall();
+      await calls().endCall();
 
       expect(ringtone.calls, ['start', 'stop']);
     });
@@ -87,8 +73,14 @@ void main() {
       expect(ringtone.calls, isEmpty);
     });
 
-    test('an outgoing call does not ring', () {
-      calls().onRemoteCallDeclined();
+    test('an outgoing call does not ring', () async {
+      await calls().initiateCall(
+        remoteUserId: 'u-1',
+        remoteUserName: 'Ada',
+        channelId: 'c-1',
+      );
+
+      expect(calls().state.status, CallStatus.calling);
       expect(ringtone.calls, isEmpty);
     });
 

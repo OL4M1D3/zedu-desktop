@@ -55,6 +55,24 @@ void main() {
       expect(model.createdAt, isNull);
     });
 
+    test('parses fallback field aliases and timestamp integers', () {
+      final model = UserMentionActivityModel.fromJson({
+        '_id': 'mention-fallback',
+        'message_id': 'msg-fb',
+        'channel_id': 'chan-fb',
+        'channel_name': 'general',
+        'sender_name': 'Bob',
+        'avatar_url': 'https://cdn.example.com/bob.png',
+        'message': 'fallback message text',
+        'created_at': 1762243200000,
+      });
+
+      expect(model.id, 'mention-fallback');
+      expect(model.senderAvatarUrl, 'https://cdn.example.com/bob.png');
+      expect(model.content, 'fallback message text');
+      expect(model.createdAt, isNotNull);
+    });
+
     test('round-trips through toJson', () {
       final original = UserMentionActivityModel(
         id: 'mention-4',
@@ -77,6 +95,30 @@ void main() {
       expect(restored.senderAvatarUrl, original.senderAvatarUrl);
       expect(restored.content, original.content);
       expect(restored.createdAt, original.createdAt);
+    });
+
+    test('implements value equality and hashCode', () {
+      final a = UserMentionActivityModel(
+        id: 'mention-5',
+        messageId: 'msg-5',
+        channelId: 'chan-5',
+        channelName: 'general',
+        senderName: 'Ada',
+        content: 'Hello',
+        createdAt: DateTime.utc(2026, 11, 4, 10, 0),
+      );
+      final b = UserMentionActivityModel(
+        id: 'mention-5',
+        messageId: 'msg-5',
+        channelId: 'chan-5',
+        channelName: 'general',
+        senderName: 'Ada',
+        content: 'Hello',
+        createdAt: DateTime.utc(2026, 11, 4, 10, 0),
+      );
+
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
     });
   });
 }

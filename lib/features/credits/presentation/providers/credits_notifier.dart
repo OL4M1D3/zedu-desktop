@@ -7,6 +7,10 @@ class CreditsNotifier extends Notifier<CreditsState> {
 
   static const _tag = 'CreditsNotifier';
 
+  /// Bumped by every [load]; an older request that finishes later sees a
+  /// different value and stops instead of overwriting newer state.
+  int _loadGeneration = 0;
+
   @override
   CreditsState build() {
     _repository = ref.read(creditsRepositoryProvider);
@@ -15,6 +19,8 @@ class CreditsNotifier extends Notifier<CreditsState> {
 
   Future<void> load({String? orgId}) async {
     if (orgId == null || orgId.isEmpty) return;
+
+    final generation = ++_loadGeneration;
     // Another organisation's usage and history must not show for this one.
     if (state.orgId != orgId) {
       state = CreditsState(
@@ -33,6 +39,9 @@ class CreditsNotifier extends Notifier<CreditsState> {
     final usageResult = await _repository.getUsage(orgId);
     final reportResult = await _repository.getUsageReport(orgId);
     final transactionsResult = await _repository.getTransactions(orgId);
+    // A newer load owns the state now: drop this one's results, success or
+    // failure, so an earlier workspace cannot replace the current balance.
+    if (generation != _loadGeneration) return;
     // A load for another organisation started meanwhile; its result wins.
     if (state.orgId != orgId) return;
 

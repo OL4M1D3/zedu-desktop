@@ -9,3 +9,6 @@ export 'channels/channels.dart';
 export 'dms/dms.dart';
 export 'files/files.dart';
 export 'people/people.dart';
+export 'buzz/buzz.dart';
+export 'inbox/inbox.dart';
+export 'threads/threads.dart';

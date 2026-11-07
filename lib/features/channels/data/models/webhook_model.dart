@@ -24,11 +24,11 @@ class WebhookModel {
     return WebhookModel(
       id: _asString(json['id']),
       channelId: _asString(json['channelId'] ?? json['channel_id']),
-      name: _asString(json['name'] ?? json['webhook_name']),
-      slug: _asString(json['slug'] ?? json['webhook_slug']),
-      url: _asString(json['url'] ?? json['webhook_url']),
-      isActive: json.containsKey('status')
-          ? json['status']?.toString().toLowerCase() == 'active'
+      name: _asString(json['webhook_name'] ?? json['name']),
+      slug: _asString(json['webhook_slug'] ?? json['slug']),
+      url: _asString(json['webhook_url'] ?? json['url']),
+      isActive: json['status'] != null
+          ? json['status'].toString().toLowerCase() == 'active'
           : _asBool(json['isActive'] ?? json['is_active']),
       createdAt: _parseDate(json['createdAt'] ?? json['created_at']),
     );

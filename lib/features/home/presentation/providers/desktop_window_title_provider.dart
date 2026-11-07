@@ -25,6 +25,23 @@ String _formatChannelTitle(String name) {
   return clean[0].toUpperCase() + clean.substring(1);
 }
 
+bool _isChannelMatch(Channel c, String? activeId) {
+  if (activeId == null) return false;
+  if (c.id == activeId || c.name == activeId) return true;
+  if (activeId == 'general' && c.name.toLowerCase() == 'general') return true;
+  final cleanName = c.name.startsWith('#')
+      ? c.name.substring(1).trim()
+      : c.name.trim();
+  final cleanActive = activeId.startsWith('#')
+      ? activeId.substring(1).trim()
+      : activeId.trim();
+  if (cleanName.isNotEmpty &&
+      cleanName.toLowerCase() == cleanActive.toLowerCase()) {
+    return true;
+  }
+  return false;
+}
+
 final desktopWindowTitleProvider = Provider<String>((ref) {
   final isAuthenticated = ref.watch(
     authNotifierProvider.select((s) => s.status == AuthStatus.authenticated),
@@ -45,9 +62,7 @@ final desktopWindowTitleProvider = Provider<String>((ref) {
   switch (activeChat.type) {
     case ActiveChatType.channel:
       final ch = channels.firstWhere(
-        (c) =>
-            c.id == activeChat.id ||
-            (activeChat.id == 'general' && c.name.toLowerCase() == 'general'),
+        (c) => _isChannelMatch(c, activeChat.id),
         orElse: () => Channel(
           id: activeChat.id ?? 'general',
           name: activeChat.id == 'general' || activeChat.id == null
@@ -95,10 +110,10 @@ final desktopWindowTitleProvider = Provider<String>((ref) {
 
   int unreadCount = 0;
   for (final c in channels) {
+    if (c.archived) continue;
     final isActive =
         activeChat.type == ActiveChatType.channel &&
-        (c.id == activeChat.id ||
-            (activeChat.id == 'general' && c.name.toLowerCase() == 'general'));
+        _isChannelMatch(c, activeChat.id);
     if (!isActive) {
       unreadCount += c.unreadCount.toInt();
     }

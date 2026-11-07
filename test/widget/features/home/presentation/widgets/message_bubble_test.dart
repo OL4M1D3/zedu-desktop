@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zedu/core/theme/app_theme.dart';
@@ -142,6 +143,58 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(const ValueKey('voice-note-waveform')), findsOneWidget);
       expect(find.byIcon(Icons.play_circle_fill), findsOneWidget);
+    });
+  });
+
+  group('MessageBubble reaction menu (#166)', () {
+    testWidgets('opens next to the Add reaction button, not at a fixed spot', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: Align(
+              alignment: Alignment.bottomRight,
+              child: SizedBox(
+                width: 400,
+                height: 120,
+                child: MessageBubble(
+                  author: 'Alice',
+                  text: 'Near the bottom',
+                  timestamp: '10:20 AM',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text('Near the bottom')));
+      await tester.pump();
+
+      final button = find.byIcon(Icons.add_reaction_outlined);
+      expect(button, findsOneWidget);
+      final buttonCenter = tester.getCenter(button);
+      // The button sits near the bottom-right corner of the window.
+      expect(buttonCenter.dx, greaterThan(800));
+      expect(buttonCenter.dy, greaterThan(800));
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      final menuItem = tester.getCenter(find.text('👍'));
+      // The old code pinned the menu at (100, 100) in the top-left corner.
+      // Now it opens beside the button, shifted up only to stay on screen.
+      expect((menuItem.dx - buttonCenter.dx).abs(), lessThan(250));
+      expect((menuItem.dy - buttonCenter.dy).abs(), lessThan(350));
     });
   });
 }

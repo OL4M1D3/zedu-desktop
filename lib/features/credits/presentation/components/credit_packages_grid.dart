@@ -26,6 +26,8 @@ class CreditPackagesGrid extends StatelessWidget {
   }
 
   List<CreditPackage> get _displayPackages {
+    if (packages.isNotEmpty) return packages;
+
     final defaultPackages = [
       const CreditPackage(
         id: 'free',
@@ -116,37 +118,7 @@ class CreditPackagesGrid extends StatelessWidget {
       ),
     ];
 
-    return defaultPackages.map((uiPkg) {
-      // Find matching package from API to get the correct real ID for purchases
-      final apiMatch = packages.where((p) {
-        final slug = p.planSlug?.toLowerCase() ?? p.name.toLowerCase();
-        if (uiPkg.name == 'Pro Plus') {
-          return slug.contains('pro_plus') ||
-              slug.contains('pro plus') ||
-              slug.contains('pro-plus');
-        }
-        if (uiPkg.name == 'Pro') {
-          return slug.contains('pro') && !slug.contains('plus');
-        }
-        if (uiPkg.name == 'Business') {
-          return slug.contains('business');
-        }
-        if (uiPkg.name == 'Enterprise') {
-          return slug.contains('enterprise');
-        }
-        return false;
-      }).firstOrNull;
-
-      return CreditPackage(
-        id: apiMatch?.id ?? uiPkg.id,
-        name: uiPkg.name,
-        description: uiPkg.description,
-        price: uiPkg.price,
-        credits: uiPkg.credits,
-        benefits: uiPkg.benefits,
-        planSlug: uiPkg.planSlug,
-      );
-    }).toList();
+    return defaultPackages;
   }
 
   static int getCrossAxisCount(double maxWidth) {

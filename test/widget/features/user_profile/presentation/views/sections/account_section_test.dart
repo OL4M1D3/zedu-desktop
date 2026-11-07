@@ -120,4 +120,54 @@ void main() {
     expect(container.read(reduceMotionProvider), isTrue);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
   });
+
+  testWidgets('binds handle text color to context.colors.textSecondary', (
+    tester,
+  ) async {
+    BuildContext? sectionContext;
+    await tester.pumpWidget(
+      buildTestMaterialApp(
+        Builder(
+          builder: (context) {
+            sectionContext = context;
+            return Scaffold(
+              body: SingleChildScrollView(
+                child: AccountSection(
+                  account: account.copyWith(username: 'CountessAda'),
+                  isSaving: false,
+                  onSave: (_) {},
+                  onDelete: () async {},
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    final handleText = tester.widget<Text>(find.text('@CountessAda'));
+    expect(
+      handleText.style?.color,
+      equals(sectionContext!.colors.textSecondary),
+    );
+  });
+
+  testWidgets('colours the initials placeholder with theme tokens', (
+    tester,
+  ) async {
+    await _pump(tester, account);
+
+    final initials = tester.widget<Text>(find.text('AL'));
+    final box = tester.widget<Container>(
+      find
+          .ancestor(of: find.text('AL'), matching: find.byType(Container))
+          .first,
+    );
+
+    expect(initials.style!.color, AppPalette.light.primary);
+    expect(
+      (box.decoration! as BoxDecoration).color,
+      AppPalette.light.primaryBg,
+    );
+  });
 }
