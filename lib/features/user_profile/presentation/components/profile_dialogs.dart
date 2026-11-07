@@ -428,92 +428,116 @@ Future<void> showEditOrganizationDialog(
 Future<void> showInviteMemberDialog(
   BuildContext context,
   Future<void> Function({required String email, required String role}) onInvite,
-) async {
-  final emailCtrl = TextEditingController();
-  String role = 'User';
-  final formKey = GlobalKey<FormState>();
-
-  await showDialog<void>(
+) {
+  return showDialog<void>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialogState) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          'Invite Team Member',
-          style: ctx.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: SizedBox(
-          width: 480,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppTextField(
-                  label: 'Email Address',
-                  controller: emailCtrl,
-                  hint: 'Enter email address',
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Email is required';
-                    }
-                    return Validators.validateEmail(context, v.trim());
-                  },
-                ),
-                const SizedBox(height: 16),
-                ProfileFieldLabel('Role'),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: role,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 14,
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Administrator',
-                      child: Text('Administrator'),
-                    ),
-                    DropdownMenuItem(value: 'Manager', child: Text('Manager')),
-                    DropdownMenuItem(value: 'User', child: Text('User')),
-                  ],
-                  onChanged: (v) => setDialogState(() => role = v ?? 'User'),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          AppButton(
-            label: 'Send Invite',
-            expand: false,
-            height: 40,
-            onPressed: () async {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(ctx);
-                await onInvite(email: emailCtrl.text.trim(), role: role);
-              }
-            },
-          ),
-        ],
-      ),
-    ),
+    builder: (_) => _InviteMemberDialog(onInvite: onInvite),
   );
+}
 
-  emailCtrl.dispose();
+/// Owns the email controller so it is disposed together with the dialog,
+/// after the closing animation has finished (not while it is still on screen).
+class _InviteMemberDialog extends StatefulWidget {
+  const _InviteMemberDialog({required this.onInvite});
+
+  final Future<void> Function({required String email, required String role})
+  onInvite;
+
+  @override
+  State<_InviteMemberDialog> createState() => _InviteMemberDialogState();
+}
+
+class _InviteMemberDialogState extends State<_InviteMemberDialog> {
+  final _emailCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  String _role = 'User';
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Text(
+        'Invite Team Member',
+        style: context.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: SizedBox(
+        width: 480,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppTextField(
+                label: 'Email Address',
+                controller: _emailCtrl,
+                hint: 'Enter email address',
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Email is required';
+                  }
+                  return Validators.validateEmail(context, v.trim());
+                },
+              ),
+              const SizedBox(height: 16),
+              ProfileFieldLabel('Role'),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                initialValue: _role,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Administrator',
+                    child: Text('Administrator'),
+                  ),
+                  DropdownMenuItem(value: 'Manager', child: Text('Manager')),
+                  DropdownMenuItem(value: 'User', child: Text('User')),
+                ],
+                onChanged: (v) => setState(() => _role = v ?? 'User'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        AppButton(
+          label: 'Send Invite',
+          expand: false,
+          height: 40,
+          onPressed: () async {
+            if (_formKey.currentState?.validate() ?? false) {
+              final email = _emailCtrl.text.trim();
+              final role = _role;
+              final onInvite = widget.onInvite;
+              Navigator.pop(context);
+              await onInvite(email: email, role: role);
+            }
+          },
+        ),
+      ],
+    );
+  }
 }
 
 /// Dialog for editing a team member's role.
