@@ -338,7 +338,12 @@ void main() {
           .read(filesActionsProvider.notifier)
           .createFolder('Plans');
       repository.done.complete(
-        const Failure(ApiFailure(message: 'Folder name already exists')),
+        const Failure(
+          ApiFailure(
+            message: 'Folder name already exists',
+            kind: ApiFailureKind.client,
+          ),
+        ),
       );
 
       expect(await pending, 'Folder name already exists');

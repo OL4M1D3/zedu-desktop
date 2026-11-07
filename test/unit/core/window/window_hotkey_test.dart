@@ -72,13 +72,13 @@ void main() {
   });
 
   group('HotkeyBinding', () {
-    test('uses Cmd+Shift+Space on macOS and Ctrl+Shift+Space elsewhere', () {
+    test('uses Cmd+Alt+Z on macOS and Ctrl+Alt+Z elsewhere', () {
       final mac = HotkeyBinding.defaultFor(TargetPlatform.macOS);
       final linux = HotkeyBinding.defaultFor(TargetPlatform.linux);
 
-      expect(mac.key, LogicalKeyboardKey.space);
-      expect(mac.modifiers, {HotKeyModifier.meta, HotKeyModifier.shift});
-      expect(linux.modifiers, {HotKeyModifier.control, HotKeyModifier.shift});
+      expect(mac.key, LogicalKeyboardKey.keyZ);
+      expect(mac.modifiers, {HotKeyModifier.meta, HotKeyModifier.alt});
+      expect(linux.modifiers, {HotKeyModifier.control, HotKeyModifier.alt});
     });
 
     test('requires a Cmd, Ctrl or Alt modifier', () {
@@ -144,10 +144,12 @@ void main() {
     });
 
     test('names the space bar Space', () {
-      expect(
-        HotkeyBinding.defaultFor(TargetPlatform.linux).label,
-        'Ctrl + Shift + Space',
+      const binding = HotkeyBinding(
+        modifiers: {HotKeyModifier.control, HotKeyModifier.shift},
+        key: LogicalKeyboardKey.space,
       );
+
+      expect(binding.label, 'Ctrl + Shift + Space');
     });
   });
 
@@ -156,7 +158,7 @@ void main() {
       await controller().start();
 
       expect(registrar.registered.single.modifiers, defaultBinding.modifiers);
-      expect(registrar.registered.single.key, LogicalKeyboardKey.space);
+      expect(registrar.registered.single.key, LogicalKeyboardKey.keyZ);
       expect(registrar.registered.single.scope, HotKeyScope.system);
     });
 

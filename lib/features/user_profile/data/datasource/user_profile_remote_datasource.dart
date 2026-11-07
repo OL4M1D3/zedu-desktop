@@ -547,7 +547,10 @@ class UserProfileRemoteDataSourceImpl implements UserProfileRemoteDataSource {
       // zedu-be builds the emailed link as Referer + 'accept_org_invitation?..'.
       headers: {'Referer': '${_config.webBaseUrl}/'},
     );
-    final data = response.data['data'] as Map<String, dynamic>;
+    final body = response.data['data'];
+    final data = body is Map<String, dynamic>
+        ? body
+        : const <String, dynamic>{};
     final invites = data['invitations'] as List<dynamic>? ?? [];
     if (invites.isNotEmpty) {
       final invite = invites.first as Map<String, dynamic>;
@@ -564,12 +567,23 @@ class UserProfileRemoteDataSourceImpl implements UserProfileRemoteDataSource {
         name: email.split('@').first,
       );
     }
-    // A successful HTTP response can still contain rejected/duplicate emails.
-    // Only announce an invitation when the server confirms it in invitations.
-    throw const ApiFailure(
-      message:
-          'The server did not confirm this invitation. Refresh invitations before retrying.',
-      kind: ApiFailureKind.client,
+    // zedu-be answers 201 with only `errors`: one message for each email it
+    // could not invite (and a 400 when it could invite nobody). This email
+    // is invited unless one of those messages names it.
+    final errors = data['errors'] as List<dynamic>? ?? const [];
+    if (errors.any((error) => error.toString().contains(email))) {
+      throw ApiFailure(
+        message: 'Could not invite $email. Please try again.',
+        kind: ApiFailureKind.client,
+      );
+    }
+    return TeamMemberModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      email: email,
+      role: role,
+      dateJoined: 'Pending',
+      status: TeamMemberStatus.pending,
+      name: email.split('@').first,
     );
   }
 

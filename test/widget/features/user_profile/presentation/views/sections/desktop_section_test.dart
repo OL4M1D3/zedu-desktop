@@ -51,7 +51,7 @@ void main() {
     await tester.pumpWidget(buildSection());
 
     expect(find.text('Show or hide Zedu'), findsOneWidget);
-    expect(find.text('Ctrl + Shift + Space'), findsOneWidget);
+    expect(find.text('Ctrl + Alt + Z'), findsOneWidget);
     expect(find.text('Change'), findsOneWidget);
   });
 
@@ -69,7 +69,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Record a shortcut'), findsNothing);
-    expect(find.text('Ctrl + Shift + Space'), findsOneWidget);
+    expect(find.text('Ctrl + Alt + Z'), findsOneWidget);
   });
 
   testWidgets('shows the registration error', (tester) async {

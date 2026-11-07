@@ -38,5 +38,20 @@ DateTime parseApiTimestamp(Object? value, {String field = 'timestamp'}) {
   throw FormatException('Unrecognised $field: $raw');
 }
 
+/// [parseApiTimestamp] for model fields that must not fail a whole payload,
+/// such as the sign-in response: a missing or unreadable value becomes epoch 0
+/// instead of throwing, and epoch seconds come back in local time, as the auth
+/// models have always read them.
+DateTime parseApiTimestampOrEpoch(Object? value, {String field = 'timestamp'}) {
+  try {
+    final parsed = parseApiTimestamp(value, field: field);
+    final isEpoch =
+        value is num || int.tryParse(value.toString().trim()) != null;
+    return isEpoch ? parsed.toLocal() : parsed;
+  } on FormatException {
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+}
+
 DateTime _fromEpochSeconds(int seconds) =>
     DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);

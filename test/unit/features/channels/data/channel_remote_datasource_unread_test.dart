@@ -38,6 +38,7 @@ void main() {
       when(
         () => mockApi.get<Map<String, dynamic>>(
           path: '/organisations/org-1/channels',
+          queryParameters: any(named: 'queryParameters'),
         ),
       ).thenAnswer((_) async => _listResponse(items));
     }

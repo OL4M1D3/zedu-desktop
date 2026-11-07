@@ -235,15 +235,17 @@ class DmRepository {
     );
   }
 
+  /// `PUT /dms/messages/:channelId`: zedu-be takes the conversation in the
+  /// path and the edited message as `thread_id` in the body.
   Future<void> editMessage(
-    String messageId, {
+    String channelId, {
     required String content,
     String? threadId,
     List<Map<String, dynamic>>? media,
     List<Map<String, dynamic>>? mentions,
   }) async {
     await _apiClient.put<Map<String, dynamic>>(
-      path: '/dms/messages/$messageId',
+      path: '/dms/messages/$channelId',
       data: {
         'content': content,
         ...?(threadId != null ? {'thread_id': threadId} : null),

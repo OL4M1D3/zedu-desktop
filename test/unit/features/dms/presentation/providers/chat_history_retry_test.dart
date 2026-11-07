@@ -118,6 +118,8 @@ void main() {
     expect(history.messages.single['status'], 'failed');
 
     final next = history.retryMessage('failed-1');
+    // The retry first looks for a copy the server already has.
+    await pumpEventQueue();
     expect(history.messages.single['status'], 'sending');
     await finish([next]);
 
@@ -152,7 +154,10 @@ void main() {
     await sending;
     final id = history.messages.single['id'] as String;
 
-    await finish([history.retryMessage(id)]);
+    final retry = history.retryMessage(id);
+    // The retry first looks for a copy the server already has.
+    await pumpEventQueue();
+    await finish([retry]);
 
     expect(requests, hasLength(2));
     expect(payloads.every((p) => p.isChannel), isTrue);

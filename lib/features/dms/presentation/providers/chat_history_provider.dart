@@ -855,10 +855,6 @@ class ChatHistoryNotifier extends ChangeNotifier {
         content: newContent,
         threadId: threadId,
       );
-      // Only clear editing state after successful save
-      if (editingMessageId == messageId) {
-        editingMessageId = null;
-      }
       return true;
     } catch (e, st) {
       AppLogger.e(
@@ -880,6 +876,9 @@ class ChatHistoryNotifier extends ChangeNotifier {
       return false;
     } finally {
       _editsInFlight.remove(messageId);
+      // The composer has already left edit mode. Keeping the message marked as
+      // being edited after a failure would make the poll skip it for good.
+      if (editingMessageId == messageId) editingMessageId = null;
     }
   }
 }

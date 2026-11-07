@@ -263,7 +263,7 @@ void main() {
 
       verify(
         () => mockRepository.editMessage(
-          'local-1',
+          'ch-1',
           content: 'edited',
           threadId: 't-1',
         ),

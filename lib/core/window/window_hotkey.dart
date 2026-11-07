@@ -21,11 +21,11 @@ class HotkeyBinding {
         platform == TargetPlatform.macOS
             ? HotKeyModifier.meta
             : HotKeyModifier.control,
-        HotKeyModifier.shift,
+        // Alt rather than Shift: a system-wide Shift+Z would take Redo, and
+        // Shift+Space a few editor shortcuts, away from every other app.
+        HotKeyModifier.alt,
       },
-      // Not Shift+Z: as a system-wide shortcut it would take Redo away
-      // from every other app.
-      key: LogicalKeyboardKey.space,
+      key: LogicalKeyboardKey.keyZ,
     );
   }
 

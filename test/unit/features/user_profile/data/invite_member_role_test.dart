@@ -54,6 +54,25 @@ void main() {
     );
   });
 
+  group('UserProfileRemoteDataSourceImpl.inviteMember response', () {
+    test('a created response without an invitations list is a sent invite, '
+        'as zedu-be answers', () async {
+      final member = await _inviteWith({'errors': <String>[]});
+
+      expect(member.email, 'invitee@example.com');
+      expect(member.status, TeamMemberStatus.pending);
+    });
+
+    test('fails when the response names the email as not invited', () async {
+      await expectLater(
+        _inviteWith({
+          'errors': ['could not generate token for invitee@example.com: boom'],
+        }),
+        throwsA(isA<ApiFailure>()),
+      );
+    });
+  });
+
   group(
     'UserProfileRemoteDataSourceImpl.inviteMember Referer (Ziki #2708)',
     () {
@@ -125,7 +144,10 @@ Future<RequestOptions> _captureInvite({
   return captured!;
 }
 
-Future<TeamMember> _invite({required List<dynamic> invitations}) async {
+Future<TeamMember> _invite({required List<dynamic> invitations}) =>
+    _inviteWith({'invitations': invitations});
+
+Future<TeamMember> _inviteWith(Map<String, dynamic> data) async {
   final config = AppConfig(
     apiBaseUrl: 'https://api.example.com/api/v1/',
     usesMockData: false,
@@ -137,9 +159,7 @@ Future<TeamMember> _invite({required List<dynamic> invitations}) async {
         handler.resolve(
           Response<Map<String, dynamic>>(
             requestOptions: options,
-            data: {
-              'data': {'invitations': invitations},
-            },
+            data: {'data': data},
           ),
         );
       },

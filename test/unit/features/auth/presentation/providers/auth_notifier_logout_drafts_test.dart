@@ -120,6 +120,8 @@ void main() {
       () async {
         final storage = MockSecureStorageService();
         when(() => storage.readAll()).thenThrow(Exception('disk error'));
+        when(() => storage.getAccessToken()).thenAnswer((_) async => 'token');
+        when(() => storage.readData(any())).thenAnswer((_) async => null);
         when(() => storage.deleteAccessToken()).thenAnswer((_) async {});
         final repo = MockAuthRepository();
         locator.registerSingleton<SecureStorageService>(storage);

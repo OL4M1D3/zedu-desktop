@@ -24,6 +24,19 @@ Dio _dio(void Function(RequestOptions) onInvite) {
     InterceptorsWrapper(
       onRequest: (options, handler) {
         if (options.path.endsWith('invite/general')) onInvite(options);
+        if (options.path.endsWith('/roles')) {
+          handler.resolve(
+            Response<Map<String, dynamic>>(
+              requestOptions: options,
+              data: {
+                'data': [
+                  {'id': 'role-user', 'name': 'User'},
+                ],
+              },
+            ),
+          );
+          return;
+        }
         handler.resolve(
           Response<Map<String, dynamic>>(
             requestOptions: options,

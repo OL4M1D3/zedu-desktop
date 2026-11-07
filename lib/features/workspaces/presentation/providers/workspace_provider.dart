@@ -243,19 +243,6 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
       clearSelectedWorkspace: nextSelected == null,
     );
   }
-
-  /// A DM belongs to one workspace. When the selected workspace really changes
-  /// (or goes away), the DM that was open there must not stay as the composer's
-  /// target, so the selection is cleared. The first workspace to load, and a
-  /// switch to the workspace that is already open, keep it.
-  @override
-  bool updateShouldNotify(WorkspaceState previous, WorkspaceState next) {
-    final before = previous.selectedWorkspace?.id;
-    if (before != null && before != next.selectedWorkspace?.id) {
-      ref.invalidate(selectedDmProvider);
-    }
-    return super.updateShouldNotify(previous, next);
-  }
 }
 
 final workspaceProvider = NotifierProvider<WorkspaceNotifier, WorkspaceState>(
