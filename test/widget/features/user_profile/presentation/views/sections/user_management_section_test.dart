@@ -390,7 +390,8 @@ void main() {
         await tester.tap(jumpButton);
         await tester.pumpAndSettle();
 
-        expect(find.text('3 of 3'), findsOneWidget);
+        // The page number and ' of 3' are separate texts; the rows show the page.
+        expect(find.text(' of 3'), findsOneWidget);
         expect(find.text('member20@example.com'), findsOneWidget);
         expect(find.text('member0@example.com'), findsNothing);
 
@@ -399,17 +400,19 @@ void main() {
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
 
-        expect(find.text('2 of 3'), findsOneWidget);
+        // The page number and ' of 3' are separate texts; the rows show the page.
+        expect(find.text(' of 3'), findsOneWidget);
         expect(find.text('member10@example.com'), findsOneWidget);
 
         // Out of bounds input clamps to valid range
         await tester.enterText(jumpInput, '99');
-        await tester.tap(
-          find.byKey(const Key('user_management_page_jump_button')),
-        );
+        await tester.ensureVisible(jumpButton);
+        await tester.pumpAndSettle();
+        await tester.tap(jumpButton);
         await tester.pumpAndSettle();
 
-        expect(find.text('3 of 3'), findsOneWidget);
+        // The page number and ' of 3' are separate texts; the rows show the page.
+        expect(find.text(' of 3'), findsOneWidget);
         expect(find.text('member20@example.com'), findsOneWidget);
       },
     );

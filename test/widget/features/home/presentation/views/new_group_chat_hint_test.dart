@@ -3,6 +3,11 @@ import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
 
+class _FakeAuthNotifier extends AuthNotifier {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.unauthenticated);
+}
+
 class _FakeProfileNotifier extends UserProfileNotifier {
   @override
   UserProfileState build() => const UserProfileState(
@@ -51,6 +56,8 @@ void main() {
       ProviderScope(
         overrides: [
           userProfileNotifierProvider.overrideWith(_FakeProfileNotifier.new),
+          // The view reads the signed-in user to leave them out.
+          authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
         ],
         child: buildTestMaterialApp(const Scaffold(body: NewGroupChatView())),
       ),

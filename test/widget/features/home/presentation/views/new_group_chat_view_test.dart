@@ -48,6 +48,8 @@ Future<void> _pumpView(WidgetTester tester, List<TeamMember> members) async {
         userProfileNotifierProvider.overrideWith(
           () => _FakeUserProfileNotifier(members),
         ),
+        // The view reads the signed-in user to leave them out.
+        authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
       ],
       child: buildTestMaterialApp(const Scaffold(body: NewGroupChatView())),
     ),
