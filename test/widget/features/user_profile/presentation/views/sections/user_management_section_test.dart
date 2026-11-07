@@ -382,9 +382,12 @@ void main() {
           const Key('user_management_page_jump_input'),
         );
         await tester.enterText(jumpInput, '3');
-        await tester.tap(
-          find.byKey(const Key('user_management_page_jump_button')),
+        final jumpButton = find.byKey(
+          const Key('user_management_page_jump_button'),
         );
+        await tester.ensureVisible(jumpButton);
+        await tester.pumpAndSettle();
+        await tester.tap(jumpButton);
         await tester.pumpAndSettle();
 
         expect(find.text('3 of 3'), findsOneWidget);

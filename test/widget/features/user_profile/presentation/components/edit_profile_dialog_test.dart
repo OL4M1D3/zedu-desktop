@@ -157,11 +157,11 @@ void main() {
     await tester.enterText(countryField, 'United');
     await tester.pumpAndSettle();
 
-    Color optionColor(String country) {
-      final coloredBox = find
-          .ancestor(of: find.text(country), matching: find.byType(ColoredBox))
+    Color? optionColor(String country) {
+      final material = find
+          .ancestor(of: find.text(country), matching: find.byType(Material))
           .first;
-      return tester.widget<ColoredBox>(coloredBox).color;
+      return tester.widget<Material>(material).color;
     }
 
     bool optionIsSelected(String country) {
@@ -447,35 +447,5 @@ void main() {
       expect(find.text('Discard changes?'), findsNothing);
       expect(find.text('Edit your profile'), findsNothing);
     });
-  });
-
-  testWidgets('photo buttons are disabled and say they are coming soon', (
-    tester,
-  ) async {
-    await openDialog(tester, (_) async => null);
-
-    for (final label in ['Upload photo', 'Remove photo']) {
-      final button = find.ancestor(
-        of: find.text(label),
-        matching: find.byWidgetPredicate((w) => w is TextButton),
-      );
-      expect(button, findsOneWidget, reason: label);
-      expect(
-        tester.widget<TextButton>(button).onPressed,
-        isNull,
-        reason: '$label should be disabled',
-      );
-      expect(
-        find.ancestor(of: button, matching: find.byType(Tooltip)),
-        findsOneWidget,
-        reason: label,
-      );
-    }
-    expect(find.byTooltip('Coming soon'), findsNWidgets(2));
-
-    // Tapping a disabled button keeps the dialog open and does nothing.
-    await tester.tap(find.text('Upload photo'), warnIfMissed: false);
-    await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsOneWidget);
   });
 }

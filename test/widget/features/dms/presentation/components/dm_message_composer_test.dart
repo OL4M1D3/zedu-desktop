@@ -24,6 +24,10 @@ class _VirtualAttachment extends Fake implements XFile {
   @override
   String get name => 'virtual-attachment.txt';
 
+  // The attachment preview reads it to tell images from other files.
+  @override
+  String? get mimeType => 'text/plain';
+
   @override
   Future<int> length() async => 4;
 }
@@ -716,6 +720,9 @@ void main() {
         AppPalette.light.textHint.withValues(alpha: 0.55),
       );
 
+      // Voice message lives in the More actions tray.
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pump();
       await tester.tap(find.byTooltip('Voice message'));
       await tester.pump();
       await tester.tap(find.byTooltip('Stop recording').first);

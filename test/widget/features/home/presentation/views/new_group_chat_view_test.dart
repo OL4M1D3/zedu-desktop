@@ -59,6 +59,18 @@ Future<void> _pumpView(WidgetTester tester, List<TeamMember> members) async {
 final _desktopPointer = TargetPlatformVariant.only(TargetPlatform.macOS);
 
 void main() {
+  // The view reaches the workspace provider, which reads AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   final testMembers = [
     const TeamMember(
       id: 'member-1',

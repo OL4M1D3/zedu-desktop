@@ -95,6 +95,9 @@ void main() {
     );
     await tester.pump();
 
+    // Attach file and Voice message live in the More actions tray.
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pump();
     await tester.tap(find.byTooltip('Voice message'));
     await tester.pumpAndSettle();
 

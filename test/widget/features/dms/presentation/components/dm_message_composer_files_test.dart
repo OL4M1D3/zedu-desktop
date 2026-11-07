@@ -12,6 +12,15 @@ class _FakeAuthNotifier extends AuthNotifier {
 class _MockSecureStorageService extends Mock implements SecureStorageService {}
 
 void main() {
+  // The composer creates an AudioRecorder; tests have no record plugin.
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.llfbandit.record/messages'),
+          (call) async => null,
+        );
+  });
+
   testWidgets('an unreadable file is rejected and the readable ones are kept', (
     tester,
   ) async {

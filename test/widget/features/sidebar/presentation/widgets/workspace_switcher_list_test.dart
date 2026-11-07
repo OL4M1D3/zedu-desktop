@@ -64,6 +64,9 @@ Widget buildSwitcherUnderTest({WorkspaceNotifier Function()? notifier}) {
 class FakeInviteUserProfileNotifier extends UserProfileNotifier {
   @override
   UserProfileState build() => const UserProfileState();
+
+  @override
+  Future<List<TeamMember>> fetchOrganisationMembers() async => [];
 }
 
 class FakeInviteActiveChatNotifier extends ActiveChatNotifier {

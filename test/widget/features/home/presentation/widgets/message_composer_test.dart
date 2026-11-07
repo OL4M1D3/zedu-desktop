@@ -9,11 +9,6 @@ const _filePickerChannel = MethodChannel(
   'miguelruivo.flutter.plugins.filepicker',
 );
 
-String _posixStyle(String path) {
-  if (!Platform.isWindows) return path;
-  return path.replaceFirst(RegExp(r'^[A-Za-z]:'), '').replaceAll(r'\', '/');
-}
-
 void _fakeFilePicker(WidgetTester tester, List<String> paths) {
   final messenger = tester.binding.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(
@@ -153,7 +148,9 @@ void main() {
       final report = File(
         '${tempDir.path}${Platform.pathSeparator}specification.pdf',
       )..writeAsBytesSync([1, 2, 3, 4]);
-      reportPath = _posixStyle(report.path);
+      // The platform's own path: on desktop XFile.name is the part after
+      // the last platform separator.
+      reportPath = report.path;
     });
 
     tearDown(() {

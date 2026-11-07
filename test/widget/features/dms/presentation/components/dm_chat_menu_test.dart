@@ -129,7 +129,9 @@ void main() {
       'saved_items',
       'search_in_conversation',
       'view_files',
+      'view_links',
       'export_transcript',
+      'report_user',
       'clear_history',
       'delete_conversation',
     };

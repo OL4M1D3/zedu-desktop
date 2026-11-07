@@ -414,9 +414,12 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
                     );
                     if (result != null) {
                       setState(() {
-                        for (final filePath
-                            in result.names.whereType<String>()) {
-                          _attachedFiles.add(XFile(filePath));
+                        // `names` are bare file names; the upload needs the
+                        // picked file's full path.
+                        for (final picked in result.files) {
+                          final path = picked.path;
+                          if (path == null) continue;
+                          _attachedFiles.add(XFile(path, name: picked.name));
                         }
                       });
                     }

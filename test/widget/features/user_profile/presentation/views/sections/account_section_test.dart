@@ -113,12 +113,19 @@ void main() {
     );
     expect(container.read(reduceMotionProvider), isFalse);
 
-    await tester.ensureVisible(find.text('Reduce motion'));
-    await tester.tap(find.byType(Switch));
+    final reduceMotion = find.descendant(
+      of: find.ancestor(
+        of: find.text('Reduce motion'),
+        matching: find.byType(MergeSemantics),
+      ),
+      matching: find.byType(Switch),
+    );
+    await tester.ensureVisible(reduceMotion);
+    await tester.tap(reduceMotion);
     await tester.pump();
 
     expect(container.read(reduceMotionProvider), isTrue);
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(tester.widget<Switch>(reduceMotion).value, isTrue);
   });
 
   testWidgets('binds handle text color to context.colors.textSecondary', (
@@ -126,21 +133,23 @@ void main() {
   ) async {
     BuildContext? sectionContext;
     await tester.pumpWidget(
-      buildTestMaterialApp(
-        Builder(
-          builder: (context) {
-            sectionContext = context;
-            return Scaffold(
-              body: SingleChildScrollView(
-                child: AccountSection(
-                  account: account.copyWith(username: 'CountessAda'),
-                  isSaving: false,
-                  onSave: (_) {},
-                  onDelete: () async {},
+      ProviderScope(
+        child: buildTestMaterialApp(
+          Builder(
+            builder: (context) {
+              sectionContext = context;
+              return Scaffold(
+                body: SingleChildScrollView(
+                  child: AccountSection(
+                    account: account.copyWith(username: 'CountessAda'),
+                    isSaving: false,
+                    onSave: (_) {},
+                    onDelete: () async {},
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

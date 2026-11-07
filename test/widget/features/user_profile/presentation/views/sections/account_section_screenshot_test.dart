@@ -75,22 +75,25 @@ Widget _buildAccountSection() {
     ),
   );
 
-  return MaterialApp(
-    debugShowCheckedModeBanner: false,
-    theme: theme,
-    home: Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: AccountSection(
-          account: const ProfileAccount(
-            name: 'Adaeze Okonkwo',
-            email: 'adaeze@zedu.chat',
-            timezone: 'Africa/Lagos',
-            username: 'adaeze',
+  // ProviderScope: the section's Reduce motion card reads its setting.
+  return ProviderScope(
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: AccountSection(
+            account: const ProfileAccount(
+              name: 'Adaeze Okonkwo',
+              email: 'adaeze@zedu.chat',
+              timezone: 'Africa/Lagos',
+              username: 'adaeze',
+            ),
+            isSaving: false,
+            onSave: (_) {},
+            onDelete: () async {},
           ),
-          isSaving: false,
-          onSave: (_) {},
-          onDelete: () async {},
         ),
       ),
     ),

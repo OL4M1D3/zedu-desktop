@@ -5,6 +5,29 @@ import 'package:zedu/features/features.dart';
 
 class MockChannelRepository extends Mock implements ChannelRepository {}
 
+/// The signed-in user; reaction pills highlight the ones they reacted with.
+class _FakeAuthNotifier extends AuthNotifier {
+  @override
+  AuthState build() => AuthState(
+    status: AuthStatus.authenticated,
+    user: User(
+      id: 'user-1',
+      firstName: 'Test',
+      lastName: 'User',
+      email: 'test@example.com',
+      phone: '',
+      username: 'testuser',
+      isVerified: true,
+      isOnboarded: true,
+      createdAt: DateTime(2026),
+      currentOrg: 'org-1',
+      currentOrganisationSlug: 'test-org',
+      avatarUrl: '',
+      defaultAvatarUrl: '',
+    ),
+  );
+}
+
 class FakeChatHistoryNotifier extends ChangeNotifier
     implements ChatHistoryNotifier {
   FakeChatHistoryNotifier(this.channelId);
@@ -74,6 +97,7 @@ void main() {
       ProviderScope(
         overrides: [
           channelRepositoryProvider.overrideWithValue(repository),
+          authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
           chatHistoryProvider.overrideWith(
             (ref, channelId) => chatNotifier ?? fakeChatHistory,
           ),

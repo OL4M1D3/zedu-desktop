@@ -17,7 +17,13 @@ class _FakeSecureStorageService extends Fake implements SecureStorageService {
   Future<void> deleteValue(String key) async => _values.remove(key);
 }
 
-const _grouped = ['Attach file', 'Voice message', 'Channel tag', 'Divider'];
+const _grouped = [
+  'Attach file',
+  'Draw a doodle',
+  'Voice message',
+  'Channel tag',
+  'Divider',
+];
 
 Future<void> _pumpComposer(WidgetTester tester, {double width = 1000}) async {
   tester.view.physicalSize = Size(width, 700);
@@ -71,7 +77,7 @@ void main() {
     _composerTest('keeps emoji and mention visible and hides the rest', (
       tester,
     ) async {
-      expect(find.byTooltip('Emoji'), findsOneWidget);
+      expect(find.byTooltip('Emoji (Ctrl/Cmd+Shift+E)'), findsOneWidget);
       expect(find.byTooltip('Mention someone'), findsOneWidget);
       expect(find.byTooltip('More actions'), findsOneWidget);
       for (final action in _grouped) {
@@ -95,7 +101,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byTooltip('Emoji'), findsOneWidget);
+      expect(find.byTooltip('Emoji (Ctrl/Cmd+Shift+E)'), findsOneWidget);
       expect(find.byTooltip('Mention someone'), findsOneWidget);
     });
 

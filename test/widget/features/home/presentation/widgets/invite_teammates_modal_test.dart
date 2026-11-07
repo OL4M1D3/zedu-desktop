@@ -142,6 +142,18 @@ Future<void> openModal(WidgetTester tester) async {
 }
 
 void main() {
+  // The widgets reach the auth and workspace providers, which read AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   setUp(() => orgMembers = []);
 
   for (final entry in {

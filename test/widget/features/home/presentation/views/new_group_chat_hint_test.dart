@@ -28,6 +28,18 @@ class _FakeProfileNotifier extends UserProfileNotifier {
 }
 
 void main() {
+  // The view reaches the workspace provider, which reads AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   const hint = 'Select at least 2 members to start a group DM (Selected: 0/2)';
 
   Future<void> pump(WidgetTester tester) async {
