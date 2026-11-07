@@ -75,8 +75,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                                 // The sidebar stays mounted so it keeps the
                                 // width the user dragged it to.
                                 Visibility(
-                                  visible:
-                                      sidebarType != HomeSidebarType.buzz,
+                                  visible: sidebarType != HomeSidebarType.buzz,
                                   maintainState: true,
                                   child: sidebarVisible
                                       ? const ResizableSidebar(
