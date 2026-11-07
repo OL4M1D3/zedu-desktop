@@ -11,6 +11,10 @@ class _DeferredUploads extends Fake implements FilesRepository {
   final first = Completer<Result<WorkspaceFile>>();
 
   @override
+  Future<Result<WorkspaceFileInfo>> fetchFileInfo(String fileId) async =>
+      Success(WorkspaceFileInfo());
+
+  @override
   Future<Result<WorkspaceFile>> uploadFile(XFile file, {String? parentId}) {
     destinations.add(workspace);
     if (destinations.length == 1) return first.future;

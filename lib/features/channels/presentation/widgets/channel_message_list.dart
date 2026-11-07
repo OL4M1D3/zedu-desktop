@@ -185,6 +185,13 @@ class _ChannelMessageListState extends ConsumerState<ChannelMessageList> {
         final tile = ChannelMessageTile(
           channelId: channelId,
           message: message,
+          saveAction:
+              message.status == null && (message.threadId ?? message.id) != null
+              ? SaveLaterButton(
+                  channelId: channelId,
+                  threadId: message.threadId ?? message.id!,
+                )
+              : null,
           onRetry: message.id != null
               ? () => ref
                     .read(chatHistoryProvider(channelId))
@@ -415,6 +422,7 @@ class ChannelMessageTile extends ConsumerStatefulWidget {
     this.onRetry,
     this.onEdit,
     this.onDelete,
+    this.saveAction,
   });
 
   final String channelId;
@@ -426,6 +434,7 @@ class ChannelMessageTile extends ConsumerStatefulWidget {
 
   /// Set for the current user's own messages; shows Delete in the menu.
   final VoidCallback? onDelete;
+  final Widget? saveAction;
 
   @override
   ConsumerState<ChannelMessageTile> createState() => _ChannelMessageTileState();

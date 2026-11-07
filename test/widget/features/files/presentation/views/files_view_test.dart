@@ -172,6 +172,10 @@ class _FakeFilesRepository extends Fake implements FilesRepository {
     return details.future;
   }
 
+  @override
+  Future<Result<WorkspaceFileInfo>> fetchFileInfo(String fileId) async =>
+      Success(WorkspaceFileInfo());
+
   Set<String> pinnedIds = {};
   final pinCalls = <(String, bool)>[];
   Result<void> pinResult = const Success(null);

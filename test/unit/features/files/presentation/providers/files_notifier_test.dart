@@ -359,6 +359,10 @@ class _PagedRepository extends Fake implements FilesRepository {
   final pages = <int>[];
 
   @override
+  Future<Result<WorkspaceFileInfo>> fetchFileInfo(String fileId) async =>
+      Success(WorkspaceFileInfo());
+
+  @override
   Future<Result<FilesPage>> fetchFiles(FilesQuery query) async {
     pages.add(query.page);
     return Success(
@@ -526,6 +530,10 @@ class _UploadRepository extends Fake implements FilesRepository {
   @override
   Future<Result<WorkspaceFile>> fetchFileDetails(String fileId) async =>
       Success(WorkspaceFile(id: fileId, name: fileId));
+
+  @override
+  Future<Result<WorkspaceFileInfo>> fetchFileInfo(String fileId) async =>
+      Success(WorkspaceFileInfo());
 
   @override
   Future<Result<Set<String>>> fetchPinnedFileIds() async => const Success({});

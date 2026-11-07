@@ -28,6 +28,7 @@ class ChannelMessage {
   final String senderName;
   final String? avatarUrl;
   final String text;
+  final String rawContent;
   final DateTime? createdAt;
   final String? status;
   final List<dynamic> media;
@@ -43,14 +44,16 @@ class ChannelMessage {
     this.id,
     required this.senderName,
     required this.text,
+    String? rawContent,
     this.avatarUrl,
     this.createdAt,
     this.status,
+
     this.media = const [],
     this.threadId,
     this.userId,
     this.reactions = const [],
-  });
+  }) : rawContent = rawContent ?? text;
 
   static List<dynamic> mediaFrom(dynamic raw) {
     if (raw is List) {
@@ -71,6 +74,7 @@ class ChannelMessage {
       return text.isEmpty ? null : text;
     }
 
+    final rawContent = json['message']?.toString() ?? '';
     return ChannelMessage(
       id: nonEmpty(json['thread_id']) ?? nonEmpty(json['id']),
       senderName:
@@ -81,7 +85,10 @@ class ChannelMessage {
       avatarUrl:
           nonEmpty(json['avatar_url']) ?? nonEmpty(json['default_avatar_url']),
       // Messages sent from the web app arrive as HTML (`<p>hi</p>`).
+      rawContent: rawContent,
+
       text: _cleanMessageText(json['message']?.toString() ?? ''),
+
       createdAt: DateTime.tryParse(
         json['created_at']?.toString() ?? '',
       )?.toLocal(),

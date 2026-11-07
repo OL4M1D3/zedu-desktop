@@ -148,6 +148,15 @@ void main() {
       expect(list.members, hasLength(2));
       expect(list.loadMoreFailed, isTrue);
       expect(list.hasMore, isTrue);
+
+      // The guard must not keep blocking once the failure is reported.
+      people.failPage2 = false;
+      await container.read(peopleListProvider('').notifier).loadMore();
+
+      final retried = container.read(peopleListProvider('')).value!;
+      expect(retried.members.map((m) => m.id), ['u-1', 'u-2', 'u-3']);
+      expect(retried.loadMoreFailed, isFalse);
+      expect(retried.hasMore, isFalse);
     });
 
     test(

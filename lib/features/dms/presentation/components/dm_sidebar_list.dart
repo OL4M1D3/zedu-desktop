@@ -62,6 +62,7 @@ class _DmSidebarListState extends ConsumerState<DmSidebarList> {
     final colors = context.colors;
     final textColor = colors.onPrimary.withValues(alpha: 0.9);
     final sort = ref.watch(dmSortProvider);
+    final unreadOnly = ref.watch(dmUnreadOnlyProvider);
 
     return Container(
       color: colors.sidebar,
@@ -125,6 +126,35 @@ class _DmSidebarListState extends ConsumerState<DmSidebarList> {
                   ),
                 ),
                 const SizedBox(width: 6),
+                Tooltip(
+                  message: unreadOnly
+                      ? 'Show all conversations'
+                      : 'Show unread only',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(5),
+                    onTap: () =>
+                        ref.read(dmUnreadOnlyProvider.notifier).toggle(),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(5),
+                        color: unreadOnly
+                            ? colors.onPrimary.withValues(alpha: 0.18)
+                            : null,
+                        border: Border.all(
+                          color: colors.onPrimary.withValues(alpha: 0.68),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.mark_email_unread_outlined,
+                        color: textColor,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 PopupMenuButton<DmSort>(
                   tooltip: 'Sort conversations',
                   onSelected: (value) =>
@@ -175,17 +205,23 @@ class _DmSidebarListState extends ConsumerState<DmSidebarList> {
                             _debouncedQuery.isEmpty &&
                             ref.read(dmListProvider.notifier).loadMoreFailed;
                         // Search results keep today's ordering; the chosen
-                        // sort applies to the conversation list itself.
-                        final activeSort = _debouncedQuery.isEmpty
+                        // sort and the unread filter apply to the conversation
+                        // list itself.
+                        final filteringList = _debouncedQuery.isEmpty;
+                        final activeSort = filteringList
                             ? sort
                             : DmSort.recentActivity;
+                        final listed = conversations
+                            .where(
+                              (conversation) => !actions.deletedIds.contains(
+                                conversation.channelId,
+                              ),
+                            )
+                            .toList();
                         final visibleConversations =
-                            conversations
-                                .where(
-                                  (conversation) => !actions.deletedIds
-                                      .contains(conversation.channelId),
-                                )
-                                .toList()
+                            (filteringList && unreadOnly
+                                  ? unreadConversations(listed)
+                                  : listed)
                               ..sort(
                                 (a, b) => activeSort.compare(
                                   a,
@@ -201,9 +237,11 @@ class _DmSidebarListState extends ConsumerState<DmSidebarList> {
                         if (visibleConversations.isEmpty) {
                           return Center(
                             child: Text(
-                              _debouncedQuery.isEmpty
-                                  ? 'No recent chats'
-                                  : 'No conversations match',
+                              _debouncedQuery.isNotEmpty
+                                  ? 'No conversations match'
+                                  : unreadOnly
+                                  ? 'No unread conversations'
+                                  : 'No recent chats',
                               style: TextStyle(
                                 color: colors.onPrimary.withValues(alpha: 0.5),
                               ),

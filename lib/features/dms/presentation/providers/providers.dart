@@ -1,5 +1,6 @@
 export 'dm_list_provider.dart';
 export 'dm_sort_provider.dart';
+export 'dm_unread_only_provider.dart';
 export 'dm_notification_poller_provider.dart';
 export 'chat_history_provider.dart';
 export 'typing_presence_provider.dart';

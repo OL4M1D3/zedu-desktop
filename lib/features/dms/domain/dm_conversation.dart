@@ -52,6 +52,9 @@ class DmConversation {
   /// [lastActivityAt] is only the epoch-0 placeholder used for sorting.
   bool get hasActivity => previewThreads.isNotEmpty || lastReadAt != null;
 
+  /// Whether the conversation has messages the user has not read yet.
+  bool get isUnread => unreadCount > 0;
+
   DateTime get lastActivityAt {
     if (previewThreads.isNotEmpty) {
       return previewThreads.first.createdAt;

@@ -43,6 +43,10 @@ class FileInfoPanel extends ConsumerWidget {
     final colors = context.colors;
     final details = ref.watch(fileDetailsProvider(file.id));
     final current = details.value ?? file;
+    final info = ref.watch(fileInfoProvider(file.id));
+    final sharedIn = info is AsyncData<WorkspaceFileInfo>
+        ? info.value.sharedInLabel
+        : '';
 
     final labelStyle = context.textTheme.bodyMedium?.copyWith(
       fontSize: 13,
@@ -157,7 +161,11 @@ class FileInfoPanel extends ConsumerWidget {
                   ),
                   row(
                     'Shared in',
-                    text(current.sharedIn.isEmpty ? '—' : current.sharedIn),
+                    text(
+                      sharedIn.isNotEmpty
+                          ? sharedIn
+                          : (current.sharedIn.isEmpty ? '—' : current.sharedIn),
+                    ),
                   ),
                   row('File size', text(formatFileSize(current.size))),
                   row(

@@ -135,6 +135,10 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
   /// dropped.
   int _listVersion = 0;
 
+  /// The list version of the "load more" call in flight, so a second scroll
+  /// does not fetch and append the same page again.
+  int? _loadingMoreVersion;
+
   bool get hasMore => _hasMore;
 
   /// The last "load more" failed (offline, expired session). The DMs already
@@ -148,6 +152,7 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
     final orgId = ref.watch(currentOrgIdProvider);
     _listVersion++;
     _loadMoreFailed = false;
+    _loadingMoreVersion = null;
     if (orgId.isEmpty) return const [];
 
     _currentPage = 1;
@@ -183,29 +188,43 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
 
   Future<void> loadMore() async {
     if (!_hasMore) return;
+    // A scroll can end several times before the first page arrives. Both calls
+    // would fetch the same page and append it, showing every row twice.
+    if (_loadingMoreVersion == _listVersion) return;
     final orgId = ref.read(currentOrgIdProvider);
     if (orgId.isEmpty) return;
 
     final current = state.value ?? [];
     final version = _listVersion;
+    _loadingMoreVersion = version;
     // Only count the page once it has loaded, so a failed load is asked for
     // again on the next scroll instead of being skipped.
     final page = _currentPage + 1;
-    final List<DmConversation> next;
     try {
-      next = await _fetchPage(orgId, page);
-    } catch (error) {
+      final List<DmConversation> next;
+      try {
+        next = await _fetchPage(orgId, page);
+      } catch (error) {
+        if (version != _listVersion) return;
+        AppLogger.w('Could not load DM page $page - $error', tag: 'DmList');
+        _loadMoreFailed = true;
+        // A new list, so the sidebar rebuilds and shows the retry.
+        state = AsyncValue.data([...current]);
+        return;
+      }
       if (version != _listVersion) return;
-      AppLogger.w('Could not load DM page $page - $error', tag: 'DmList');
-      _loadMoreFailed = true;
-      // A new list, so the sidebar rebuilds and shows the retry.
-      state = AsyncValue.data([...current]);
-      return;
+      _currentPage = page;
+      _loadMoreFailed = false;
+      // A conversation can arrive between two page requests, shifting the
+      // offset and returning one already listed. Keep the list unique too.
+      final knownKeys = current.map((c) => c.conversationKey).toSet();
+      state = AsyncValue.data([
+        ...current,
+        ...next.where((c) => knownKeys.add(c.conversationKey)),
+      ]);
+    } finally {
+      if (_loadingMoreVersion == version) _loadingMoreVersion = null;
     }
-    if (version != _listVersion) return;
-    _currentPage = page;
-    _loadMoreFailed = false;
-    state = AsyncValue.data([...current, ...next]);
   }
 
   Future<void> refresh() async {
@@ -214,6 +233,7 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
 
     _listVersion++;
     _loadMoreFailed = false;
+    _loadingMoreVersion = null;
     _currentPage = 1;
     _hasMore = true;
     state = const AsyncValue.loading();

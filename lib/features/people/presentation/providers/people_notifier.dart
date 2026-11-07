@@ -96,6 +96,7 @@ class PeopleListNotifier extends AsyncNotifier<PeopleListState> {
           loadedPage: current.loadedPage,
           totalPages: current.totalPages,
           totalItems: current.totalItems,
+          isLoadingMore: false,
           loadMoreFailed: true,
         ),
       );

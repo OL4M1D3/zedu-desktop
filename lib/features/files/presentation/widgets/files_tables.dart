@@ -207,6 +207,27 @@ Widget _cellText(BuildContext context, String text) => Text(
   ),
 );
 
+/// The channels a file was shared in.
+///
+/// The files list does not carry that, so it comes from the file's own info
+/// route. While it loads, and for a file shared nowhere, the cell keeps the
+/// dash the list used to show.
+class _SharedInCell extends ConsumerWidget {
+  const _SharedInCell(this.file, {super.key});
+
+  final WorkspaceFile file;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = ref.watch(fileInfoProvider(file.id));
+    final sharedIn = info is AsyncData<WorkspaceFileInfo>
+        ? info.value.sharedInLabel
+        : '';
+    final text = sharedIn.isNotEmpty ? sharedIn : file.sharedIn;
+    return _cellText(context, text.isEmpty ? '—' : text);
+  }
+}
+
 Widget _nameCell(
   BuildContext context,
   Widget icon,
@@ -425,7 +446,7 @@ class FilesTable extends StatelessWidget {
                   )
                 : null,
           ),
-          _cellText(context, file.sharedIn.isEmpty ? '—' : file.sharedIn),
+          _SharedInCell(file, key: ValueKey('shared-in-${file.id}')),
           _cellText(context, ownerNameOf(file)),
           _cellText(context, formatFileDate(file.modifiedAt)),
           _cellText(context, formatFileSize(file.size)),

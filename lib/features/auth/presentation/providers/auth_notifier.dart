@@ -355,11 +355,12 @@ class AuthNotifier extends Notifier<AuthState> {
     final result = await _repository.login(email: email, password: password);
     switch (result) {
       case Success<AuthSession>():
-        AppLogger.i(
-          rememberMe
-              ? 'Login succeeded — token persisted'
-              : 'Login succeeded — token kept for this run only',
-          tag: _tag,
+        AppLogger.i('Login succeeded — token persisted', tag: _tag);
+        await _storage.saveAccessToken(result.value.accessToken);
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user: result.value.user,
+          isLoading: false,
         );
         await _storage.saveAccessToken(
           result.value.accessToken,

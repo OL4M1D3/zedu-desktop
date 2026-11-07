@@ -282,6 +282,33 @@ void main() {
       return repository;
     }
 
+    testWidgets('a bubble from another day carries its date (#3057)', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 9, 5);
+      final earlier = DateTime(now.year, now.month, now.day - 3, 9, 5);
+
+      await pumpChat(tester, [
+        {
+          'id': 'm-today',
+          'content': 'today',
+          'user_id': 'u-2',
+          'created_at': today.toIso8601String(),
+        },
+        {
+          'id': 'm-earlier',
+          'content': 'earlier',
+          'user_id': 'u-2',
+          'created_at': earlier.toIso8601String(),
+        },
+      ]);
+
+      // Today keeps the bare clock; the older bubble names its day.
+      expect(find.text('9:05 AM'), findsOneWidget);
+      expect(find.textContaining(', 9:05 AM'), findsOneWidget);
+    });
+
     testWidgets('own space explains privacy and hides its system event', (
       tester,
     ) async {
@@ -666,6 +693,22 @@ void main() {
       await tester.pump();
 
       expect(opened, [Uri.parse('https://example.com/bold')]);
+    });
+
+    testWidgets('the conversation menu opens its shared links view', (
+      tester,
+    ) async {
+      await pumpChat(tester, [
+        message('m1', '<a href="https://zedu.chat/dm-docs">DM docs</a>'),
+      ]);
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View links'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ada Lovelace links'), findsOneWidget);
+      expect(find.text('https://zedu.chat/dm-docs'), findsOneWidget);
     });
 
     Finder bubbleDividers(String text) => find.descendant(

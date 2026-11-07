@@ -5,6 +5,7 @@ export 'domain/entities/file_preview.dart';
 export 'domain/entities/file_share.dart';
 export 'domain/entities/files_query.dart';
 export 'domain/entities/workspace_file.dart';
+export 'domain/entities/workspace_file_info.dart';
 export 'domain/repositories/files_repository.dart';
 export 'presentation/providers/file_deletions_notifier.dart';
 export 'presentation/providers/file_downloads_notifier.dart';

@@ -118,6 +118,36 @@ void main() {
     await _unmount(tester);
   });
 
+  testWidgets('every row the DM menu offers has a handler', (tester) async {
+    // Mirrors the cases in _handleMenuAction. A row with no case silently does
+    // nothing when pressed, so the two sets must stay equal.
+    const handled = <String>{
+      'view_profile',
+      'mute_notifications',
+      'pin_conversation',
+      'pinned_messages',
+      'saved_items',
+      'search_in_conversation',
+      'view_files',
+      'export_transcript',
+      'clear_history',
+      'delete_conversation',
+    };
+
+    await _pumpChatArea(tester);
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+
+    final offered = tester
+        .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+        .map((item) => item.value)
+        .toSet();
+
+    expect(offered, handled);
+    expect(find.text('Block User'), findsNothing);
+    await _unmount(tester);
+  });
+
   testWidgets('Export transcript opens the export dialog', (tester) async {
     await _pumpChatArea(tester);
     await tester.tap(find.byTooltip('More options'));

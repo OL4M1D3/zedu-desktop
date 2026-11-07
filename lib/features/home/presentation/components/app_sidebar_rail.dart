@@ -8,6 +8,7 @@ class AppSidebarRail extends ConsumerStatefulWidget {
     this.onTypeSelected,
     this.settingsSelected = false,
     this.threadsSelected = false,
+    this.laterSelected = false,
   });
 
   static const double width = 50;
@@ -16,6 +17,7 @@ class AppSidebarRail extends ConsumerStatefulWidget {
   final ValueChanged<HomeSidebarType>? onTypeSelected;
   final bool settingsSelected;
   final bool threadsSelected;
+  final bool laterSelected;
 
   @override
   ConsumerState<AppSidebarRail> createState() => _AppSidebarRailState();
@@ -108,6 +110,12 @@ class _AppSidebarRailState extends ConsumerState<AppSidebarRail> {
             label: 'Threads',
             isActive: widget.threadsSelected,
             onTap: () => context.go(AppRouter.threads),
+          ),
+          _RailNavItem(
+            icon: Icons.bookmark_border,
+            label: 'Later',
+            isActive: widget.laterSelected,
+            onTap: () => context.go(AppRouter.later),
           ),
           _RailNavItem(
             icon: Icons.folder_open_outlined,

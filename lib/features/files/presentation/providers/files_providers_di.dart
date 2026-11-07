@@ -98,3 +98,16 @@ final fileDetailsProvider = FutureProvider.autoDispose
         Failure(:final error) => throw error,
       };
     });
+
+/// What the server knows about a file beyond its list entry, such as the
+/// channels it was shared in. The list endpoint leaves that out.
+final fileInfoProvider = FutureProvider.autoDispose
+    .family<WorkspaceFileInfo, String>((ref, fileId) async {
+      final result = await ref
+          .watch(filesRepositoryProvider)
+          .fetchFileInfo(fileId);
+      return switch (result) {
+        Success(:final value) => value,
+        Failure(:final error) => throw error,
+      };
+    });

@@ -31,6 +31,8 @@ void main() {
     expect(message.senderName, 'gold_salam');
     expect(message.avatarUrl, 'https://cdn.zedu.chat/default.png');
     expect(message.text, 'Hi & welcome\nLine two\na\nb');
+
+    expect(message.rawContent, contains('<p>Hi &amp; welcome</p>'));
     expect(message.media, isEmpty);
     // Without an id, the content identifies the message.
     expect(message.dedupeKey, contains('gold_salam'));

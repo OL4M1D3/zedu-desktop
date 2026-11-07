@@ -114,8 +114,13 @@ class _DmChatAreaState extends ConsumerState<DmChatArea> {
         await _showConversationSearch();
       case 'view_files':
         await _showConversationFiles();
+
       case 'export_transcript':
         await _showExportTranscript();
+
+      case 'view_links':
+        await _showConversationLinks();
+
       case 'clear_history':
         final confirmed = await _confirmConversationAction(
           title: 'Clear history?',
@@ -245,6 +250,37 @@ class _DmChatAreaState extends ConsumerState<DmChatArea> {
       builder: (context) => ConversationFilesDialog(
         title: '${widget.conversation.displayName} files',
         history: history,
+      ),
+    );
+  }
+
+  Future<void> _showConversationLinks() async {
+    final history = ref.read(
+      chatHistoryProvider(widget.conversation.channelId),
+    );
+    List<ConversationLinkSource> sources() => [
+      for (final message in history.messages)
+        ConversationLinkSource(
+          content: message['content']?.toString() ?? '',
+          author: history.isMyMessage(message)
+              ? history.currentUserName
+              : (message['sender_name'] ??
+                        message['username'] ??
+                        widget.conversation.displayName)
+                    .toString(),
+          sharedAt: DateTime.tryParse(message['created_at']?.toString() ?? ''),
+        ),
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => ConversationLinksDialog(
+        title: '${widget.conversation.displayName} links',
+        messages: sources(),
+        loadMessages: () async {
+          await history.loadAll();
+          return sources();
+        },
       ),
     );
   }
@@ -891,13 +927,12 @@ class _DmChatHeader extends StatelessWidget {
               menuItem('pinned_messages', 'Pinned messages'),
               menuItem('saved_items', 'Saved items'),
               menuItem('search_in_conversation', 'Search in conversation'),
+              menuItem('view_links', 'View links'),
               menuItem('view_files', 'View files'),
               menuItem('export_transcript', 'Export transcript'),
               const PopupMenuDivider(height: 1),
               menuItem('clear_history', 'Clear history'),
               menuItem('report_user', 'Report ${conversation.displayName}'),
-              if (kUnfinishedFeaturesEnabled)
-                menuItem('block_user', 'Block User'),
               menuItem(
                 'delete_conversation',
                 'Delete conversation',
@@ -910,6 +945,11 @@ class _DmChatHeader extends StatelessWidget {
     );
   }
 }
+
+const _bubbleMonths = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
 
 class _MessageBubble extends ConsumerWidget {
   final Map<String, dynamic> message;
@@ -1061,7 +1101,15 @@ class _MessageBubble extends ConsumerWidget {
         : (createdAt.hour == 0 ? 12 : createdAt.hour);
     final minute = createdAt.minute.toString().padLeft(2, '0');
     final period = createdAt.hour >= 12 ? 'PM' : 'AM';
-    final timeString = '$hour:$minute $period';
+    var timeString = '$hour:$minute $period';
+    final now = DateTime.now();
+    if (createdAt.year != now.year ||
+        createdAt.month != now.month ||
+        createdAt.day != now.day) {
+      // Without the day, a message from last week reads as today.
+      timeString =
+          '${_bubbleMonths[createdAt.month - 1]} ${createdAt.day}, $timeString';
+    }
 
     final senderName = isMe
         ? history.currentUserName
@@ -1151,6 +1199,12 @@ class _MessageBubble extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (status == null && messageId.isNotEmpty)
+                        SaveLaterButton(
+                          channelId: channelId,
+                          threadId:
+                              message['thread_id']?.toString() ?? messageId,
+                        ),
                       Text(
                         timeString,
                         style: TextStyle(color: colors.textHint, fontSize: 11),
