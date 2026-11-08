@@ -26,6 +26,13 @@ class _FakeAuthNotifier extends AuthNotifier {
   );
 }
 
+class _FakeWorkspaceNotifier extends WorkspaceNotifier {
+  @override
+  WorkspaceState build() => const WorkspaceState(
+    selectedWorkspace: Workspace(id: 'org-1', name: 'Org', avatar: ''),
+  );
+}
+
 Map<String, dynamic> _message(int n) => {
   'id': 'm$n',
   'content': 'message $n',
@@ -54,6 +61,7 @@ void main() {
       overrides: [
         dmRepositoryProvider.overrideWithValue(repo),
         authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
+        workspaceProvider.overrideWith(_FakeWorkspaceNotifier.new),
       ],
     );
     final sub = container.listen(chatHistoryProvider('ch-1'), (_, _) {});

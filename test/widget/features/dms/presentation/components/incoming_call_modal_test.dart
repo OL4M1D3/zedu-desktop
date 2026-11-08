@@ -52,6 +52,16 @@ void main() {
       expect(_avatarInitial(tester), '🎧');
     });
 
+    testWidgets('keeps UTF-16 surrogate pair emoji whole', (tester) async {
+      await _pumpModal(tester, '🎉 Party User');
+      expect(_avatarInitial(tester), '🎉');
+    });
+
+    testWidgets('keeps compound skin-tone emoji whole', (tester) async {
+      await _pumpModal(tester, '👋🏽 Wave User');
+      expect(_avatarInitial(tester), '👋🏽');
+    });
+
     testWidgets('ignores spaces before the name', (tester) async {
       await _pumpModal(tester, '  ada');
 

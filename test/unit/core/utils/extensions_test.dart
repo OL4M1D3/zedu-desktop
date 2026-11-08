@@ -18,4 +18,18 @@ void main() {
       expect(1.countLabel('person', 'people'), '1 person');
     });
   });
+
+  group('CountLabelX.unreadBadgeText', () {
+    test('formats counts under or equal to 99 as numbers', () {
+      expect(0.unreadBadgeText, '0');
+      expect(1.unreadBadgeText, '1');
+      expect(99.unreadBadgeText, '99');
+    });
+
+    test('formats counts greater than 99 as 99+', () {
+      expect(100.unreadBadgeText, '99+');
+      expect(250.unreadBadgeText, '99+');
+      expect(1351.unreadBadgeText, '99+');
+    });
+  });
 }

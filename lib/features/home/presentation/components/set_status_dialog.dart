@@ -132,241 +132,252 @@ class _SetStatusDialogState extends ConsumerState<SetStatusDialog> {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Dialog(
-      backgroundColor: colors.background,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ─────────────────────────────────────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Set a status',
-                      style: context.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close, color: colors.textHint, size: 20),
-                    splashRadius: 18,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // ── Status text field with emoji prefix ────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: colors.borderOutline),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            Navigator.of(context).pop(),
+      },
+      child: Dialog(
+        backgroundColor: colors.background,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ─────────────────────────────────────────────────────
+                Row(
                   children: [
-                    // Emoji picker trigger
-                    Semantics(
-                      label: 'Choose status emoji',
-                      button: true,
-                      child: InkWell(
-                        onTap: _pickEmoji,
-                        mouseCursor: SystemMouseCursors.click,
-                        borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: _selectedEmoji != null
-                              ? Text(
-                                  _selectedEmoji!,
-                                  style: const TextStyle(fontSize: 20),
-                                )
-                              : Icon(
-                                  Icons.sentiment_satisfied_alt_outlined,
-                                  color: colors.textHint,
-                                  size: 22,
-                                ),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 28,
-                      color: colors.borderOutline,
-                    ),
-                    // Text input
                     Expanded(
-                      child: TextField(
-                        controller: _textCtrl,
-                        decoration: InputDecoration(
-                          hintText: "What's your status?",
-                          hintStyle: context.textTheme.bodyMedium?.copyWith(
-                            color: colors.textHint,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          isDense: true,
-                        ),
-                        style: context.textTheme.bodyMedium?.copyWith(
+                      child: Text(
+                        'Set a status',
+                        style: context.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                           color: colors.textPrimary,
                         ),
-                        maxLength: 100,
-                        // Rebuild so the clear button and the selected suggestion follow the text.
-                        onChanged: (_) => setState(() {}),
-                        buildCounter:
-                            (
-                              _, {
-                              required currentLength,
-                              maxLength,
-                              required isFocused,
-                            }) => null,
                       ),
                     ),
-                    // Clear button
-                    if (_textCtrl.text.isNotEmpty || _selectedEmoji != null)
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          size: 16,
-                          color: colors.textHint,
-                        ),
-                        splashRadius: 14,
-                        onPressed: () => setState(() {
-                          _textCtrl.clear();
-                          _selectedEmoji = null;
-                        }),
-                      ),
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: Icon(Icons.close, color: colors.textHint, size: 20),
+                      splashRadius: 18,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // ── Quick-pick presets ─────────────────────────────────────────
-              Text(
-                'Suggested',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: colors.textHint,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              ...[
-                for (final preset in _presets)
-                  _PresetTile(
-                    preset: preset,
-                    selected: preset == _selectedPreset,
-                    onTap: () => _applyPreset(preset),
+                // ── Status text field with emoji prefix ────────────────────────
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: colors.borderOutline),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-              ],
-              const SizedBox(height: 20),
-
-              // ── Remove after dropdown ──────────────────────────────────────
-              Text(
-                'Remove status after…',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _TimeoutDropdown(
-                value: _timeout,
-                onChanged: (v) => setState(() => _timeout = v),
-              ),
-              const SizedBox(height: 16),
-
-              // ── Pause notifications checkbox ───────────────────────────────
-              Row(
-                children: [
-                  Checkbox(
-                    value: _pauseNotifications,
-                    activeColor: colors.primary,
-                    onChanged: (v) =>
-                        setState(() => _pauseNotifications = v ?? false),
-                  ),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () => setState(
-                        () => _pauseNotifications = !_pauseNotifications,
+                  child: Row(
+                    children: [
+                      // Emoji picker trigger
+                      Semantics(
+                        label: 'Choose status emoji',
+                        button: true,
+                        child: InkWell(
+                          onTap: _pickEmoji,
+                          mouseCursor: SystemMouseCursors.click,
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(8),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            child: _selectedEmoji != null
+                                ? Text(
+                                    _selectedEmoji!,
+                                    style: const TextStyle(fontSize: 20),
+                                  )
+                                : Icon(
+                                    Icons.sentiment_satisfied_alt_outlined,
+                                    color: colors.textHint,
+                                    size: 22,
+                                  ),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        'Pause notifications',
-                        style: context.textTheme.bodyMedium?.copyWith(
-                          color: colors.textPrimary,
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: colors.borderOutline,
+                      ),
+                      // Text input
+                      Expanded(
+                        child: TextField(
+                          controller: _textCtrl,
+                          decoration: InputDecoration(
+                            hintText: "What's your status?",
+                            hintStyle: context.textTheme.bodyMedium?.copyWith(
+                              color: colors.textHint,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            isDense: true,
+                          ),
+                          style: context.textTheme.bodyMedium?.copyWith(
+                            color: colors.textPrimary,
+                          ),
+                          maxLength: 100,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) {
+                            if (!_isSaving) _save();
+                          },
+                          // Rebuild so the clear button and the selected suggestion follow the text.
+                          onChanged: (_) => setState(() {}),
+                          buildCounter:
+                              (
+                                _, {
+                                required currentLength,
+                                maxLength,
+                                required isFocused,
+                              }) => null,
+                        ),
+                      ),
+                      // Clear button
+                      if (_textCtrl.text.isNotEmpty || _selectedEmoji != null)
+                        IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: colors.textHint,
+                          ),
+                          splashRadius: 14,
+                          onPressed: () => setState(() {
+                            _textCtrl.clear();
+                            _selectedEmoji = null;
+                          }),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Quick-pick presets ─────────────────────────────────────────
+                Text(
+                  'Suggested',
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: colors.textHint,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...[
+                  for (final preset in _presets)
+                    _PresetTile(
+                      preset: preset,
+                      selected: preset == _selectedPreset,
+                      onTap: () => _applyPreset(preset),
+                    ),
+                ],
+                const SizedBox(height: 20),
+
+                // ── Remove after dropdown ──────────────────────────────────────
+                Text(
+                  'Remove status after…',
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _TimeoutDropdown(
+                  value: _timeout,
+                  onChanged: (v) => setState(() => _timeout = v),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Pause notifications checkbox ───────────────────────────────
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _pauseNotifications,
+                      activeColor: colors.primary,
+                      onChanged: (v) =>
+                          setState(() => _pauseNotifications = v ?? false),
+                    ),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => setState(
+                          () => _pauseNotifications = !_pauseNotifications,
+                        ),
+                        child: Text(
+                          'Pause notifications',
+                          style: context.textTheme.bodyMedium?.copyWith(
+                            color: colors.textPrimary,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
-              // ── Actions ────────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.textPrimary,
-                      side: BorderSide(color: colors.borderOutline),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                // ── Actions ────────────────────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colors.textPrimary,
+                        side: BorderSide(color: colors.borderOutline),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      child: const Text('Cancel'),
                     ),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _isSaving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.primary,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 12,
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Save',
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
-                          )
-                        : const Text(
-                            'Save',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                  ),
-                ],
-              ),
-            ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -28,6 +28,7 @@ const _session = CreditCheckoutSession(
 const _email = 'tester@example.com';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late MockCreditsRepository repository;
   late ProviderContainer container;
   late CreditsNotifier notifier;
@@ -82,7 +83,12 @@ void main() {
         final first = notifier.purchasePackage(package: _pro, email: _email);
         pending.complete(
           fails
-              ? const Failure(ApiFailure(message: 'Checkout unavailable'))
+              ? const Failure(
+                  ApiFailure(
+                    message: 'Checkout unavailable',
+                    kind: ApiFailureKind.client,
+                  ),
+                )
               : const Success(_session),
         );
         expect(await first, fails ? isNull : same(_session));

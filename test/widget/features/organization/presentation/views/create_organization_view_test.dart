@@ -59,5 +59,28 @@ void main() {
       expect(entryValues.contains('Ireland'), isTrue);
       expect(entryValues.contains('Afghanistan'), isTrue);
     });
+
+    testWidgets('fills the form fields with the background token', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildCreateOrganizationViewUnderTest());
+
+      final background = AppPalette.light.background;
+      final textFields = tester.widgetList<TextField>(
+        find.descendant(
+          of: find.byType(TextFormField),
+          matching: find.byType(TextField),
+        ),
+      );
+      final dropdown = tester.widget<DropdownMenu<String>>(
+        find.byType(DropdownMenu<String>),
+      );
+
+      expect(textFields, hasLength(2));
+      for (final field in textFields) {
+        expect(field.decoration!.fillColor, background);
+      }
+      expect(dropdown.inputDecorationTheme!.fillColor, background);
+    });
   });
 }

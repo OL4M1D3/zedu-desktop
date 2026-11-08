@@ -15,7 +15,13 @@ final dmListProvider =
 
 class SelectedDmNotifier extends Notifier<DmConversation?> {
   @override
-  DmConversation? build() => null;
+  DmConversation? build() {
+    // A conversation belongs to the active workspace. Rebuild and clear the
+    // selection when that workspace changes so it cannot remain the composer
+    // target for a different workspace.
+    ref.watch(currentOrgIdProvider);
+    return null;
+  }
 
   void select(DmConversation? conversation) {
     state = conversation;
@@ -129,6 +135,10 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
   /// dropped.
   int _listVersion = 0;
 
+  /// The list version of the "load more" call in flight, so a second scroll
+  /// does not fetch and append the same page again.
+  int? _loadingMoreVersion;
+
   bool get hasMore => _hasMore;
 
   /// The last "load more" failed (offline, expired session). The DMs already
@@ -142,6 +152,7 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
     final orgId = ref.watch(currentOrgIdProvider);
     _listVersion++;
     _loadMoreFailed = false;
+    _loadingMoreVersion = null;
     if (orgId.isEmpty) return const [];
 
     _currentPage = 1;
@@ -156,34 +167,64 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
     if (version == _listVersion && results.length < DmRepository.pageSize) {
       _hasMore = false;
     }
+
+    final usesMockData =
+        locator.isRegistered<AppConfig>() && locator<AppConfig>().usesMockData;
+    if (usesMockData && results.isEmpty && page == 1) {
+      return [
+        DmConversation(
+          channelId: 'mock-channel-id-123',
+          username: 'Test User',
+          participantId: 'mock-user-id',
+          previewMessage:
+              'This is a test conversation. Tap to test the composer.',
+          unreadCount: 0,
+        ),
+      ];
+    }
+
     return results;
   }
 
   Future<void> loadMore() async {
     if (!_hasMore) return;
+    // A scroll can end several times before the first page arrives. Both calls
+    // would fetch the same page and append it, showing every row twice.
+    if (_loadingMoreVersion == _listVersion) return;
     final orgId = ref.read(currentOrgIdProvider);
     if (orgId.isEmpty) return;
 
     final current = state.value ?? [];
     final version = _listVersion;
+    _loadingMoreVersion = version;
     // Only count the page once it has loaded, so a failed load is asked for
     // again on the next scroll instead of being skipped.
     final page = _currentPage + 1;
-    final List<DmConversation> next;
     try {
-      next = await _fetchPage(orgId, page);
-    } catch (error) {
+      final List<DmConversation> next;
+      try {
+        next = await _fetchPage(orgId, page);
+      } catch (error) {
+        if (version != _listVersion) return;
+        AppLogger.w('Could not load DM page $page - $error', tag: 'DmList');
+        _loadMoreFailed = true;
+        // A new list, so the sidebar rebuilds and shows the retry.
+        state = AsyncValue.data([...current]);
+        return;
+      }
       if (version != _listVersion) return;
-      AppLogger.w('Could not load DM page $page - $error', tag: 'DmList');
-      _loadMoreFailed = true;
-      // A new list, so the sidebar rebuilds and shows the retry.
-      state = AsyncValue.data([...current]);
-      return;
+      _currentPage = page;
+      _loadMoreFailed = false;
+      // A conversation can arrive between two page requests, shifting the
+      // offset and returning one already listed. Keep the list unique too.
+      final knownKeys = current.map((c) => c.conversationKey).toSet();
+      state = AsyncValue.data([
+        ...current,
+        ...next.where((c) => knownKeys.add(c.conversationKey)),
+      ]);
+    } finally {
+      if (_loadingMoreVersion == version) _loadingMoreVersion = null;
     }
-    if (version != _listVersion) return;
-    _currentPage = page;
-    _loadMoreFailed = false;
-    state = AsyncValue.data([...current, ...next]);
   }
 
   Future<void> refresh() async {
@@ -192,9 +233,86 @@ class DmListNotifier extends AsyncNotifier<List<DmConversation>> {
 
     _listVersion++;
     _loadMoreFailed = false;
+    _loadingMoreVersion = null;
     _currentPage = 1;
     _hasMore = true;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => _fetchPage(orgId, 1));
   }
 }
+
+class DmSearchResultsNotifier extends AsyncNotifier<List<DmConversation>> {
+  DmSearchResultsNotifier(this.search);
+
+  final String search;
+  int _currentPage = 1;
+  bool _hasMore = true;
+  int _searchVersion = 0;
+
+  bool get hasMore => _hasMore;
+
+  @override
+  Future<List<DmConversation>> build() async {
+    final query = search.trim();
+    if (query.isEmpty) return const [];
+    final orgId = ref.watch(currentOrgIdProvider);
+    if (orgId.isEmpty) return const [];
+
+    _searchVersion++;
+    _currentPage = 1;
+    _hasMore = true;
+    return _fetchPage(orgId, 1, query);
+  }
+
+  Future<List<DmConversation>> _fetchPage(
+    String orgId,
+    int page,
+    String query,
+  ) async {
+    final repository = ref.read(dmRepositoryProvider);
+    final version = _searchVersion;
+    final results = await repository.getConversations(
+      orgId: orgId,
+      page: page,
+      search: query,
+    );
+    if (version == _searchVersion && results.length < DmRepository.pageSize) {
+      _hasMore = false;
+    }
+    return results;
+  }
+
+  Future<void> loadMore() async {
+    if (!_hasMore) return;
+    final query = search.trim();
+    if (query.isEmpty) return;
+    final orgId = ref.read(currentOrgIdProvider);
+    if (orgId.isEmpty) return;
+
+    final current = state.value ?? [];
+    final version = _searchVersion;
+    final page = _currentPage + 1;
+    final next = await _fetchPage(orgId, page, query);
+    if (version != _searchVersion) return;
+    _currentPage = page;
+    state = AsyncValue.data([...current, ...next]);
+  }
+
+  Future<void> refresh() async {
+    final query = search.trim();
+    if (query.isEmpty) return;
+    final orgId = ref.read(currentOrgIdProvider);
+    if (orgId.isEmpty) return;
+
+    _searchVersion++;
+    _currentPage = 1;
+    _hasMore = true;
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() => _fetchPage(orgId, 1, query));
+  }
+}
+
+final dmSearchResultsProvider = AsyncNotifierProvider.autoDispose
+    .family<DmSearchResultsNotifier, List<DmConversation>, String>(
+      DmSearchResultsNotifier.new,
+    );

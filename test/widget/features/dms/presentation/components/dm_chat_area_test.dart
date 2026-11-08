@@ -37,6 +37,18 @@ class FakeSignedInAuthNotifier extends AuthNotifier {
 }
 
 void main() {
+  // The widgets reach the auth and workspace providers, which read AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   testWidgets('DmChatArea header has no test notification button', (
     tester,
   ) async {
@@ -233,7 +245,7 @@ void main() {
   );
 
   group('DmChatArea message text', () {
-    Future<void> pumpChat(
+    Future<MockDmRepository> pumpChat(
       WidgetTester tester,
       List<Map<String, dynamic>> messages,
     ) async {
@@ -257,6 +269,11 @@ void main() {
             dmDraftStoreProvider.overrideWith(
               (ref) => DmDraftStore(storage, userId: 'user-1', orgId: 'org-1'),
             ),
+            savedMessagesStoreProvider.overrideWith((ref) {
+              final store = SavedMessagesStore(storage, userId: 'user-1');
+              unawaited(store.load());
+              return store;
+            }),
           ],
           child: buildTestMaterialApp(
             Scaffold(
@@ -274,7 +291,35 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      return repository;
     }
+
+    testWidgets('a bubble from another day carries its date (#3057)', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 9, 5);
+      final earlier = DateTime(now.year, now.month, now.day - 3, 9, 5);
+
+      await pumpChat(tester, [
+        {
+          'id': 'm-today',
+          'content': 'today',
+          'user_id': 'u-2',
+          'created_at': today.toIso8601String(),
+        },
+        {
+          'id': 'm-earlier',
+          'content': 'earlier',
+          'user_id': 'u-2',
+          'created_at': earlier.toIso8601String(),
+        },
+      ]);
+
+      // Today keeps the bare clock; the older bubble names its day.
+      expect(find.text('9:05 AM'), findsOneWidget);
+      expect(find.textContaining(', 9:05 AM'), findsOneWidget);
+    });
 
     testWidgets('own space explains privacy and hides its system event', (
       tester,
@@ -437,62 +482,127 @@ void main() {
       'created_at': '2026-10-17T08:00:00Z',
     };
 
-    Future<void> searchFor(WidgetTester tester, String query) async {
-      await tester.tap(find.byTooltip('More options'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Search in conversation'));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.byType(TextField),
-        ),
-        query,
-      );
-      await tester.pumpAndSettle();
-    }
-
-    Finder searchResult(String text) =>
-        find.descendant(of: find.byType(ListTile), matching: find.text(text));
-
-    testWidgets('search shows results without HTML tags', (tester) async {
-      await pumpChat(tester, [
-        message('m1', '<p>hello <strong>team</strong></p>'),
-      ]);
-
-      await searchFor(tester, 'team');
-
-      expect(searchResult('hello team'), findsOneWidget);
-    });
-
-    testWidgets('search does not match tag names', (tester) async {
-      await pumpChat(tester, [
-        message('m1', '<p>hello <strong>team</strong></p>'),
-      ]);
-
-      await searchFor(tester, 'strong');
-
-      expect(find.byType(ListTile), findsNothing);
-    });
-
-    testWidgets('search finds and shows decoded special characters', (
-      tester,
-    ) async {
-      await pumpChat(tester, [message('m1', '<p>Tom &amp; Jerry &lt;3</p>')]);
-
-      await searchFor(tester, 'tom & jerry');
-
-      expect(searchResult('Tom & Jerry <3'), findsOneWidget);
-    });
-
     testWidgets('opens the message menu on long press', (tester) async {
       await pumpChat(tester, [ownMessage('m1', 'my message')]);
 
       await tester.longPress(find.text('my message', findRichText: true));
       await tester.pumpAndSettle();
 
+      expect(find.text('Pin message'), findsOneWidget);
       expect(find.text('Edit message'), findsOneWidget);
       expect(find.text('Delete message'), findsOneWidget);
+    });
+
+    testWidgets('offers only Pin on someone else\'s message', (tester) async {
+      await pumpChat(tester, [message('m1', 'their message')]);
+
+      await tester.longPress(find.text('their message', findRichText: true));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pin message'), findsOneWidget);
+      expect(find.text('Edit message'), findsNothing);
+      expect(find.text('Delete message'), findsNothing);
+    });
+
+    testWidgets('Pin message pins the thread and says so', (tester) async {
+      final repository = await pumpChat(tester, [
+        {...message('m1', 'their message'), 'thread_id': 'thread-1'},
+      ]);
+      when(
+        () => repository.pinMessage(threadId: 'thread-1', channelId: 'ch-1'),
+      ).thenAnswer((_) async {});
+
+      await tester.longPress(find.text('their message', findRichText: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pin message'));
+      await tester.pump();
+
+      verify(
+        () => repository.pinMessage(threadId: 'thread-1', channelId: 'ch-1'),
+      ).called(1);
+      expect(find.text('Message pinned'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('Pin message says when pinning fails', (tester) async {
+      final repository = await pumpChat(tester, [
+        ownMessage('m1', 'my message'),
+      ]);
+      when(
+        () => repository.pinMessage(
+          threadId: any(named: 'threadId'),
+          channelId: any(named: 'channelId'),
+        ),
+      ).thenThrow(Exception('offline'));
+
+      await tester.longPress(find.text('my message', findRichText: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pin message'));
+      await tester.pump();
+
+      expect(find.text("Couldn't pin the message. Try again."), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('saves a message and offers to remove it again', (
+      tester,
+    ) async {
+      await pumpChat(tester, [ownMessage('m1', 'remember this')]);
+
+      await tester.longPress(find.text('remember this', findRichText: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to Saved items'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Saved to Saved items.'), findsOneWidget);
+
+      await tester.longPress(find.text('remember this', findRichText: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove from Saved items'), findsOneWidget);
+    });
+
+    testWidgets('incoming messages can be saved, not edited or deleted', (
+      tester,
+    ) async {
+      await pumpChat(tester, [message('m2', 'from Ada')]);
+
+      await tester.longPress(find.text('from Ada', findRichText: true));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit message'), findsNothing);
+      expect(find.text('Delete message'), findsNothing);
+      expect(find.text('Save to Saved items'), findsOneWidget);
+
+      await tester.tap(find.text('Save to Saved items'));
+      await tester.pumpAndSettle();
+      expect(find.text('Saved to Saved items.'), findsOneWidget);
+    });
+
+    testWidgets('Saved items from the conversation menu lists what was saved', (
+      tester,
+    ) async {
+      await pumpChat(tester, [message('m3', 'keep me')]);
+
+      await tester.longPress(find.text('keep me', findRichText: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to Saved items'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Saved items'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SavedItemsDialog), findsOneWidget);
+      final dialog = find.byType(SavedItemsDialog);
+      expect(
+        find.descendant(of: dialog, matching: find.text('keep me')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('Ada Lovelace')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('Edit message from the menu puts the message in the composer', (
@@ -595,6 +705,22 @@ void main() {
       await tester.pump();
 
       expect(opened, [Uri.parse('https://example.com/bold')]);
+    });
+
+    testWidgets('the conversation menu opens its shared links view', (
+      tester,
+    ) async {
+      await pumpChat(tester, [
+        message('m1', '<a href="https://zedu.chat/dm-docs">DM docs</a>'),
+      ]);
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View links'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ada Lovelace links'), findsOneWidget);
+      expect(find.text('https://zedu.chat/dm-docs'), findsOneWidget);
     });
 
     Finder bubbleDividers(String text) => find.descendant(

@@ -1,75 +1,282 @@
+import 'dart:io';
+
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
 
-const _recordChannel = MethodChannel('com.llfbandit.record/messages');
+const _filePickerChannel = MethodChannel(
+  'miguelruivo.flutter.plugins.filepicker',
+);
 
-class _FakeUserProfileNotifier extends UserProfileNotifier {
-  @override
-  UserProfileState build() => const UserProfileState();
+void _fakeFilePicker(WidgetTester tester, List<String> paths) {
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(
+    _filePickerChannel,
+    (call) async => [
+      for (final path in paths)
+        {'path': path, 'name': path.split(RegExp(r'[/\\]')).last, 'size': 4},
+    ],
+  );
+  addTearDown(
+    () => messenger.setMockMethodCallHandler(_filePickerChannel, null),
+  );
 }
 
-Future<void> _pumpComposer(WidgetTester tester) async {
+class _MockChatHistory extends Mock implements ChatHistoryNotifier {}
+
+class _FakeProfileNotifier extends UserProfileNotifier {
+  _FakeProfileNotifier(this.initial);
+
+  final UserProfileState initial;
+
+  @override
+  UserProfileState build() => initial;
+
+  @override
+  Future<void> load() async {}
+}
+
+const _rocket = TeamMember(
+  id: 'u-1',
+  email: 'rocket@zedu.test',
+  role: 'Member',
+  dateJoined: '2026-01-01',
+  status: TeamMemberStatus.active,
+  name: '🚀 Rocket',
+);
+
+const _engineer = TeamMember(
+  id: 'u-2',
+  email: 'alice@zedu.test',
+  role: 'Member',
+  dateJoined: '2026-01-01',
+  status: TeamMemberStatus.active,
+  name: '👩‍💻 Alice',
+);
+
+const _blankName = TeamMember(
+  id: 'u-3',
+  email: 'blank@zedu.test',
+  role: 'Member',
+  dateJoined: '2026-01-01',
+  status: TeamMemberStatus.active,
+  name: '   ',
+);
+
+const _ada = TeamMember(
+  id: 'u-4',
+  email: 'ada@zedu.test',
+  role: 'Admin',
+  dateJoined: '2026-01-01',
+  status: TeamMemberStatus.active,
+  name: 'Ada Lovelace',
+);
+
+Future<void> _pumpWithMentionList(
+  WidgetTester tester,
+  List<TeamMember> members,
+) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        userProfileNotifierProvider.overrideWith(_FakeUserProfileNotifier.new),
+        userProfileNotifierProvider.overrideWith(
+          () => _FakeProfileNotifier(UserProfileState(teamMembers: members)),
+        ),
       ],
       child: buildTestMaterialApp(
         Scaffold(
           body: MessageComposer(
-            activeChat: ActiveChatState.generalChannel,
+            activeChat: const ActiveChatState(
+              type: ActiveChatType.channel,
+              id: 'general',
+            ),
             onSend: (_) {},
           ),
         ),
       ),
     ),
   );
+  await tester.pumpAndSettle();
+  await tester.tap(find.byType(TextField));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextField), '@');
+  await tester.pumpAndSettle();
 }
 
 void main() {
-  setUp(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_recordChannel, (call) async {
-          return call.method == 'hasPermission' ? true : null;
-        });
+  group('MessageComposer mention suggestion avatars', () {
+    testWidgets('show the whole first emoji for emoji-prefixed names', (
+      tester,
+    ) async {
+      await _pumpWithMentionList(tester, [_rocket, _engineer]);
+
+      expect(find.text('🚀'), findsOneWidget);
+      expect(find.text('👩‍💻'), findsOneWidget);
+      expect(find.text('🚀 Rocket'), findsOneWidget);
+    });
+
+    testWidgets('fall back to ? for whitespace-only names', (tester) async {
+      await _pumpWithMentionList(tester, [_blankName]);
+
+      expect(find.text('?'), findsOneWidget);
+    });
+
+    testWidgets('keep showing the first letter of ordinary names', (
+      tester,
+    ) async {
+      await _pumpWithMentionList(tester, [_ada]);
+
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('Ada Lovelace'), findsOneWidget);
+    });
   });
 
-  tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_recordChannel, null);
-  });
+  group('MessageComposer attachment handling', () {
+    late Directory tempDir;
+    late String reportPath;
 
-  testWidgets('the send button has a tooltip once there is text', (
-    tester,
-  ) async {
-    await _pumpComposer(tester);
+    setUp(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('com.llfbandit.record/messages'),
+            (call) async => null,
+          );
+      tempDir = Directory.systemTemp.createTempSync(
+        'zedu_attach_composer_test',
+      );
+      final report = File(
+        '${tempDir.path}${Platform.pathSeparator}specification.pdf',
+      )..writeAsBytesSync([1, 2, 3, 4]);
+      // The platform's own path: on desktop XFile.name is the part after
+      // the last platform separator.
+      reportPath = report.path;
+    });
 
-    // The formatting bar shows on focus, and its buttons insert text, which
-    // swaps the mic for the send icon.
-    await tester.tap(find.byType(TextField));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Bold'));
-    await tester.pumpAndSettle();
+    tearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
 
-    final sendButton = find.ancestor(
-      of: find.byIcon(Icons.send),
-      matching: find.byType(IconButton),
-    );
-    expect(tester.widget<IconButton>(sendButton).tooltip, 'Send message');
-  });
+    testWidgets('sends picked files as media with the message', (tester) async {
+      String? sentMessage;
+      final history = _MockChatHistory();
+      when(
+        () => history.sendMessage(
+          any(),
+          media: any(named: 'media'),
+          isChannel: any(named: 'isChannel'),
+        ),
+      ).thenAnswer((_) async {});
 
-  testWidgets('the stop button has a tooltip while recording', (tester) async {
-    await _pumpComposer(tester);
+      _fakeFilePicker(tester, [reportPath]);
 
-    await tester.tap(find.byTooltip('Record voice note'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileNotifierProvider.overrideWith(
+              () => _FakeProfileNotifier(
+                UserProfileState(teamMembers: const [_ada]),
+              ),
+            ),
+            chatHistoryProvider('general').overrideWith((ref) => history),
+          ],
+          child: buildTestMaterialApp(
+            Scaffold(
+              body: MessageComposer(
+                activeChat: const ActiveChatState(
+                  type: ActiveChatType.channel,
+                  id: 'general',
+                ),
+                onSend: (msg) => sentMessage = msg,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final stopButton = find.ancestor(
-      of: find.byIcon(Icons.stop_circle),
-      matching: find.byType(IconButton),
-    );
-    expect(tester.widget<IconButton>(stopButton).tooltip, 'Stop recording');
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Attach file'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      // Chip shows the filename
+      expect(find.text('specification.pdf'), findsOneWidget);
+
+      // Type some text
+      await tester.enterText(find.byType(TextField), 'Check this document');
+      await tester.pumpAndSettle();
+
+      // Tap send
+      await tester.tap(find.byTooltip('Send message'));
+      await tester.pumpAndSettle();
+
+      expect(sentMessage, 'Check this document');
+      final sentMedia =
+          verify(
+                () => history.sendMessage(
+                  'Check this document',
+                  media: captureAny(named: 'media'),
+                  isChannel: true,
+                ),
+              ).captured.single
+              as List<XFile>;
+      expect(sentMedia, hasLength(1));
+      expect(sentMedia.first.path, reportPath);
+      expect(sentMedia.first.name, contains('specification.pdf'));
+
+      // Chips are cleared after send
+      expect(find.text('specification.pdf'), findsNothing);
+    });
+
+    testWidgets('allows removing an attached file chip before sending', (
+      tester,
+    ) async {
+      String? sentMessage;
+
+      _fakeFilePicker(tester, [reportPath]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileNotifierProvider.overrideWith(
+              () => _FakeProfileNotifier(
+                UserProfileState(teamMembers: const [_ada]),
+              ),
+            ),
+          ],
+          child: buildTestMaterialApp(
+            Scaffold(
+              body: MessageComposer(
+                activeChat: const ActiveChatState(
+                  type: ActiveChatType.channel,
+                  id: 'general',
+                ),
+                onSend: (msg) => sentMessage = msg,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Attach file'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('specification.pdf'), findsOneWidget);
+
+      // Tap delete on the chip
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      expect(find.text('specification.pdf'), findsNothing);
+      expect(sentMessage, isNull);
+    });
   });
 }

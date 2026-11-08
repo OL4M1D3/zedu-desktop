@@ -5,14 +5,56 @@ import 'package:zedu/features/features.dart';
 /// first 77 and adds "...". It counts characters as people see them (grapheme
 /// clusters), so an emoji or accented letter at the cut is never split.
 String notificationPreview(String text) {
-  final characters = text.characters;
-  if (characters.length <= 80) return text;
+  // Messages from another client can carry HTML. Strip the markup and decode
+  // entities *before* truncating, so the cut never lands inside a tag or an
+  // escaped character and the banner shows what the sender wrote.
+  final plain = _notificationPlainText(text);
+  final characters = plain.characters;
+  if (characters.length <= 80) return plain;
   return '${characters.take(77)}...';
+}
+
+/// Tags become a space so words on either side do not run together, entities
+/// are decoded until decoding no longer changes the text, and the whitespace
+/// that leaves behind is collapsed.
+String _notificationPlainText(String raw) {
+  if (raw.isEmpty) return '';
+  var text = raw.replaceAll(RegExp(r'<[^>]*>'), ' ');
+  const entities = {
+    '&nbsp;': ' ',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&apos;': "'",
+  };
+  for (var i = 0; i < 3; i++) {
+    final before = text;
+    entities.forEach((k, v) => text = text.replaceAll(k, v));
+    if (text == before) break;
+  }
+  return text.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService(ref);
 });
+
+/// The saved Settings > Notifications preferences for the selected workspace,
+/// or null while loading or when they cannot be loaded. Refreshed when the
+/// workspace changes or the preferences are saved.
+final desktopNotificationPreferencesProvider =
+    FutureProvider<NotificationPreferences?>((ref) async {
+      final orgId = ref.watch(currentOrgIdProvider);
+      final result = await ref
+          .watch(userProfileRepositoryProvider)
+          .getNotificationPreferences(orgId: orgId.isEmpty ? null : orgId);
+      return switch (result) {
+        Success<NotificationPreferences>() => result.value,
+        Failure<NotificationPreferences>() => null,
+      };
+    });
 
 class NotificationService {
   final Ref _ref;
@@ -73,6 +115,13 @@ class NotificationService {
     if (settings.isMuted(senderId)) return;
 
     if (!forceShow) {
+      final allowed = desktopNotificationAllowed(
+        preferences: _ref.read(desktopNotificationPreferencesProvider).value,
+        status: authState.user?.status,
+        now: DateTime.now(),
+      );
+      if (!allowed) return;
+
       final isFocused = await (_isFocused?.call() ?? _defaultIsFocused());
       final selectedChannel = _ref.read(selectedDmProvider)?.channelId;
 

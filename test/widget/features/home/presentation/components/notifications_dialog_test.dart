@@ -106,6 +106,7 @@ void main() {
       final ada = _dm('c-ada', 'Ada', unread: 2);
       final container = ProviderContainer(
         overrides: [
+          currentOrgIdProvider.overrideWithValue('org-test'),
           dmListProvider.overrideWith(() => _Dms([ada])),
         ],
       );

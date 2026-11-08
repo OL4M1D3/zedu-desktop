@@ -97,6 +97,7 @@ Future<ProviderContainer> _pump(
   final router = _router(withTextField: withTextField);
   final container = ProviderContainer(
     overrides: [
+      currentOrgIdProvider.overrideWithValue('org-test'),
       authNotifierProvider.overrideWith(() => _Auth(status)),
       channelProvider.overrideWith(
         pendingChannels != null

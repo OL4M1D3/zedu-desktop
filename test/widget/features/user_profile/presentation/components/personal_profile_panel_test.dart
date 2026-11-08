@@ -52,6 +52,7 @@ Future<ProviderContainer> _pump(
   WidgetTester tester, {
   String username = 'hassanat',
   String phoneNumber = '',
+  String avatarUrl = '',
   bool statusFails = false,
 }) async {
   tester.view.physicalSize = const Size(1400, 1000);
@@ -67,6 +68,7 @@ Future<ProviderContainer> _pump(
             timezone: 'Africa/Lagos',
             username: username,
             phoneNumber: phoneNumber,
+            avatarUrl: avatarUrl,
           ),
         ),
       ),
@@ -282,4 +284,91 @@ void main() {
     expect(_copyIconBeside('Not provided'), findsNothing);
     expect(_copyIconBeside('hassanat@example.com'), findsOneWidget);
   });
+
+  testWidgets('header close button has accessible tooltip and closes panel', (
+    t,
+  ) async {
+    final c = await _pump(t);
+    final closeBtn = find.byTooltip('Close');
+    expect(closeBtn, findsOneWidget);
+
+    final icon = find.descendant(
+      of: closeBtn,
+      matching: find.byIcon(Icons.close),
+    );
+    expect(icon, findsOneWidget);
+
+    await t.tap(closeBtn);
+    await t.pump();
+    expect(c.read(personalProfilePanelProvider), isFalse);
+  });
+
+  testWidgets('Renders image when avatarUrl is present', (t) async {
+    await _pump(t, avatarUrl: 'https://example.com/photo.png');
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsNothing);
+  });
+
+  testWidgets('Renders initials fallback when avatarUrl is empty', (t) async {
+    await _pump(t, avatarUrl: '');
+    expect(find.text('AH'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
+
+  testWidgets(
+    'desktop profile panel action buttons are wired and responsive (Ziki #147)',
+    (t) async {
+      final c = await _pump(t);
+
+      // Favourite button is omitted on your own profile
+      expect(find.byIcon(Icons.star_outline), findsNothing);
+
+      // Mute button pauses notifications and shows feedback toast
+      await _tapAndExpectToast(
+        t,
+        find.text('Mute'),
+        'Notifications paused for 1 hour',
+      );
+      expect(c.read(notificationSettingsProvider).isDndActive, isTrue);
+
+      // Unmute button resumes notifications and cancels the timer
+      await _tapAndExpectToast(t, find.text('Unmute'), 'Notifications resumed');
+      expect(c.read(notificationSettingsProvider).isDndActive, isFalse);
+
+      // Hide button toggles presence away
+      await _tapAndExpectToast(t, find.text('Hide'), 'You are now away');
+      expect(find.textContaining('Away'), findsOneWidget);
+
+      // Copy action copies handle to clipboard
+      String? copied;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      await _tapAndExpectToast(
+        t,
+        find.byTooltip('Copy your username'),
+        'Copied @hassanat',
+      );
+      expect(copied, '@hassanat');
+
+      // View Files switches sidebar to files tab and closes panel
+      await t.tap(find.text('View Files'));
+      await t.pump();
+      expect(c.read(homeSidebarProvider), HomeSidebarType.files);
+      expect(c.read(personalProfilePanelProvider), isFalse);
+    },
+  );
 }

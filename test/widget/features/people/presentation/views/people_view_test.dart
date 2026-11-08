@@ -115,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(people.searches, contains('grace'));
-    expect(find.text('Showing 1 of 1 members'), findsOneWidget);
+    expect(find.text('Showing 1 of 1 member'), findsOneWidget);
     // One search for the whole tab: the sidebar filters too.
     expect(find.text('Ada Lovelace'), findsNothing);
     expect(find.text('Grace Hopper'), findsNWidgets(2));
@@ -135,7 +135,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
 
-    expect(find.text('Showing 1 of 1 members'), findsOneWidget);
+    expect(find.text('Showing 1 of 1 member'), findsOneWidget);
     expect(find.text('Grace Hopper'), findsNothing);
     expect(find.text('Ada Lovelace'), findsNWidgets(2));
     // Both boxes show the search in force.

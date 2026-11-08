@@ -48,6 +48,18 @@ User _user({String? currentOrg}) => User(
 );
 
 void main() {
+  // The widgets reach the auth and workspace providers, which read AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   group('CreditsPaymentDeepLinkListener', () {
     late MockAppLinks mockAppLinks;
     late StreamController<Uri> linkController;
@@ -205,6 +217,40 @@ void main() {
       expect(org, 'org-ws');
     });
 
+    testWidgets(
+      'does not subscribe to uriLinkStream when unmounted while getting initial link',
+      (tester) async {
+        final completer = Completer<Uri?>();
+        when(
+          () => mockAppLinks.getInitialLink(),
+        ).thenAnswer((_) => completer.future);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authNotifierProvider.overrideWith(
+                () => FakeDeepLinkAuthNotifier(user: _user()),
+              ),
+            ],
+            child: MaterialApp(
+              home: CreditsPaymentDeepLinkListener(
+                appLinks: mockAppLinks,
+                child: const SizedBox(),
+              ),
+            ),
+          ),
+        );
+
+        // Unmount the listener before initial link completes
+        await tester.pumpWidget(const SizedBox());
+
+        completer.complete(null);
+        await tester.pump();
+
+        expect(linkController.hasListener, isFalse);
+      },
+    );
+
     testWidgets('falls back to the sign-in org when no workspace is selected', (
       tester,
     ) async {
@@ -245,6 +291,7 @@ void main() {
               creditsOrgIdProvider.overrideWith((ref) => ref.watch(_orgId)),
               creditsNotifierProvider.overrideWith(
                 () => _SpyCreditsNotifier(
+                  succeeds: true,
                   onVerify: (sessionId, orgId) =>
                       verified.add((sessionId, orgId)),
                 ),
@@ -301,9 +348,13 @@ class _OrgId extends Notifier<String> {
 }
 
 class _SpyCreditsNotifier extends CreditsNotifier {
-  _SpyCreditsNotifier({required this.onVerify});
+  _SpyCreditsNotifier({required this.onVerify, this.succeeds = false});
 
   final void Function(String sessionId, String orgId) onVerify;
+
+  /// What [verifyPayment] reports. A failed verification may be retried when
+  /// the link arrives again; a successful one never runs twice.
+  final bool succeeds;
 
   @override
   CreditsState build() => const CreditsState();
@@ -314,6 +365,6 @@ class _SpyCreditsNotifier extends CreditsNotifier {
     required String orgId,
   }) async {
     onVerify(sessionId, orgId);
-    return false;
+    return succeeds;
   }
 }

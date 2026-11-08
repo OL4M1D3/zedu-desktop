@@ -8,6 +8,10 @@ class AuthNotifier extends Notifier<AuthState> {
   late SecureStorageService _storage;
   late AuthInterceptor _interceptor;
 
+  /// How long [loginWithGoogle] waits for the browser redirect before giving
+  /// up and clearing the loading state.
+  Duration googleSignInWait = const Duration(minutes: 5);
+
   /// Guards against overlapping presence-toggle requests (rapid clicks,
   /// reopening the menu while a request is pending).
   bool _presenceToggleInFlight = false;
@@ -105,6 +109,39 @@ class AuthNotifier extends Notifier<AuthState> {
   static const sessionExpiredMessage =
       'Your session has expired. Please sign in again.';
 
+  /// Shown when an email+password login attempt is rejected. One generic
+  /// message that does not reveal which credential was wrong and does not
+  /// claim the session expired: a rejected attempt is not an expired session.
+  static const invalidCredentialsMessage =
+      'Invalid email or password. Please check your credentials and try again.';
+
+  /// Matches server rejection wording for bad credentials, e.g. "Invalid
+  /// email and password supplied", "Incorrect password", "credentials not
+  /// valid". Other 4xx login answers (rate limit, validation) stay untouched.
+  static final _credentialRejectionPattern = RegExp(
+    r'(invalid|incorrect|wrong|bad|mismatch)\s+.{0,40}?(email|password|credential)'
+    r'|(email|password)\s+.{0,40}?(invalid|incorrect|wrong|bad|mismatch)'
+    r'|credential',
+    caseSensitive: false,
+  );
+
+  /// Message the login screen shows for a failed email+password attempt.
+  /// Wrong credentials may arrive as a 4xx carrying per-credential wording
+  /// ("Invalid email and password supplied") or as a 401; both are wrong
+  /// credentials on this route, so both get [invalidCredentialsMessage].
+  /// Network, timeout, rate limit and server problems keep their real
+  /// messages, so the screen never hides an unrelated failure cause.
+  static String loginFailureMessage(ApiFailure failure) {
+    if (failure.kind == ApiFailureKind.unauthorized) {
+      return AuthNotifier.invalidCredentialsMessage;
+    }
+    if (failure.kind == ApiFailureKind.client &&
+        _credentialRejectionPattern.hasMatch(failure.message)) {
+      return AuthNotifier.invalidCredentialsMessage;
+    }
+    return failure.friendlyMessage;
+  }
+
   @override
   AuthState build() {
     _repository = ref.read(authRepositoryProvider);
@@ -112,6 +149,7 @@ class AuthNotifier extends Notifier<AuthState> {
     _interceptor = locator<AuthInterceptor>();
     ref.onDispose(() {
       _disposed = true;
+      _interceptor.onUnauthorized = null;
       _statusExpiryTimer?.cancel();
     });
     // Whenever the user (or their status) changes, re-arm the "Clear after" timer.
@@ -129,6 +167,7 @@ class AuthNotifier extends Notifier<AuthState> {
     });
 
     _interceptor.onUnauthorized = () {
+      if (_disposed || !ref.mounted) return;
       AppLogger.w('Unauthorized — clearing session', tag: _tag);
       // Only a session that was signed in expired: a 401 from a login attempt
       // or a session restore is not one, and further 401s from requests that
@@ -316,11 +355,12 @@ class AuthNotifier extends Notifier<AuthState> {
     final result = await _repository.login(email: email, password: password);
     switch (result) {
       case Success<AuthSession>():
-        AppLogger.i(
-          rememberMe
-              ? 'Login succeeded — token persisted'
-              : 'Login succeeded — token kept for this run only',
-          tag: _tag,
+        AppLogger.i('Login succeeded — token persisted', tag: _tag);
+        await _storage.saveAccessToken(result.value.accessToken);
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user: result.value.user,
+          isLoading: false,
         );
         await _storage.saveAccessToken(
           result.value.accessToken,
@@ -332,7 +372,7 @@ class AuthNotifier extends Notifier<AuthState> {
         AppLogger.w('Login rejected — ${result.error.message}', tag: _tag);
         state = state.copyWith(
           isLoading: false,
-          error: result.error.friendlyMessage,
+          error: loginFailureMessage(result.error),
         );
     }
   }
@@ -550,15 +590,22 @@ class AuthNotifier extends Notifier<AuthState> {
           // org: keep the locally newer status and take only the fresh profile fields.
           adopted = fresh._withStatus(current.status);
         } else {
-          // On a same-organisation refresh, the profile response supplies
-          // presence but not custom-status fields. Preserve those locally
-          // confirmed fields while adopting the server's latest presence.
-          // Do not carry them into a different organisation.
-          adopted = orgChanged
-              ? fresh
-              : fresh._withStatus(
-                  current.status.copyWith(online: fresh.status.online),
-                );
+          // If the server's fresh profile contains custom status, adopt it.
+          // Otherwise preserve locally confirmed status while adopting the
+          // server's latest presence. Do not carry them into a different organisation.
+          final UserStatus resolvedStatus;
+          if (orgChanged) {
+            resolvedStatus = fresh.status;
+          } else if (fresh.status.hasCustomStatus) {
+            resolvedStatus = fresh.status;
+          } else if (current.status.hasCustomStatus) {
+            resolvedStatus = current.status.copyWith(
+              online: fresh.status.online,
+            );
+          } else {
+            resolvedStatus = fresh.status;
+          }
+          adopted = orgChanged ? fresh : fresh._withStatus(resolvedStatus);
           _setConfirmedOnline(
             online: fresh.status.online,
             sessionGeneration: sessionGeneration,
@@ -589,17 +636,26 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  Future<void> loginWithGoogle() async {
+  Future<void> loginWithGoogle({bool rememberMe = true}) async {
     AppLogger.d('Google Sign-In attempt', tag: _tag);
     state = state.copyWith(isLoading: true, clearError: true);
 
     HttpServer? server;
+    Timer? deadline;
     try {
       final config = locator<AppConfig>();
-      const port = 8000; // Standard redirect port for desktop
 
-      // 1. Bind to localhost port to intercept the redirect
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+      // 1. Bind to a localhost port to intercept the redirect. Prefer the
+      // conventional port; when another app holds it, fall back to a port the
+      // OS assigns (Google accepts any port on a loopback redirect URI).
+      late final HttpServer bound;
+      try {
+        bound = await HttpServer.bind(InternetAddress.loopbackIPv4, 8000);
+      } on SocketException {
+        bound = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      }
+      server = bound;
+      final port = bound.port;
       AppLogger.d('Local loopback server listening on port $port', tag: _tag);
 
       final redirectUri = 'http://127.0.0.1:$port'; // Desktop Loopback URI
@@ -618,15 +674,43 @@ class AuthNotifier extends Notifier<AuthState> {
 
       // 3. Wait for Google's redirect containing the authorization code
       String? grantCode;
+      String? callbackError;
+      // server.timeout only fires on an established idle connection: a closed
+      // browser tab or a redirect that never arrives leaves no connection, so
+      // cap the whole wait with a deadline that ends the stream and lets the
+      // null-code path below clear isLoading.
+      deadline = Timer(googleSignInWait, () {
+        server?.close(force: true);
+      });
       await for (final request in server.timeout(
         const Duration(seconds: 60),
         onTimeout: (sink) {
           sink.addError(TimeoutException('Google Sign-In redirect timed out'));
         },
       )) {
+        final oauthError = request.uri.queryParameters['error'];
         grantCode = request.uri.queryParameters['code'];
+        if (oauthError != null ||
+            grantCode == null ||
+            grantCode.trim().isEmpty) {
+          grantCode = null;
+          callbackError = oauthError == 'access_denied'
+              ? 'Google sign-in was cancelled.'
+              : 'Google sign-in failed. Please try again.';
+        }
+        final title = callbackError == null
+            ? 'Authentication Successful'
+            : 'Authentication Unsuccessful';
+        final heading = callbackError == null
+            ? 'Sign In Successful!'
+            : oauthError == 'access_denied'
+            ? 'Sign In Cancelled'
+            : 'Sign In Failed';
+        final message = callbackError == null
+            ? 'You have successfully authenticated with Zedu. You can now close this tab and return to the application.'
+            : '$callbackError You can close this tab and return to Zedu to try again.';
 
-        // Return a clean success page to the user in their browser
+        // Render fixed messages rather than reflecting OAuth query values.
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.contentType = ContentType.html
@@ -634,18 +718,18 @@ class AuthNotifier extends Notifier<AuthState> {
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Authentication Successful</title>
+              <title>$title</title>
               <style>
                 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 50px; background-color: #f9f9f9; }
                 .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: inline-block; max-width: 400px; }
-                h1 { color: #4CAF50; margin-top: 0; }
+                h1 { color: ${callbackError == null ? '#4CAF50' : 'inherit'}; margin-top: 0; }
                 p { color: #666; font-size: 16px; }
               </style>
             </head>
             <body>
               <div class="card">
-                <h1>Sign In Successful!</h1>
-                <p>You have successfully authenticated with Zedu. You can now close this tab and return to the application.</p>
+                <h1>$heading</h1>
+                <p>$message</p>
               </div>
             </body>
             </html>
@@ -653,13 +737,17 @@ class AuthNotifier extends Notifier<AuthState> {
         await request.response.close();
         break;
       }
+      deadline.cancel();
 
       await server.close();
       server = null;
 
       if (grantCode == null) {
         AppLogger.w('Google Sign-In aborted or code not found', tag: _tag);
-        state = state.copyWith(isLoading: false);
+        state = state.copyWith(
+          isLoading: false,
+          error: callbackError ?? 'Google sign-in failed. Please try again.',
+        );
         return;
       }
 
@@ -674,8 +762,16 @@ class AuthNotifier extends Notifier<AuthState> {
       );
       switch (result) {
         case Success<AuthSession>():
-          AppLogger.i('Google Sign-In succeeded — token persisted', tag: _tag);
-          await _storage.saveAccessToken(result.value.accessToken);
+          AppLogger.i(
+            rememberMe
+                ? 'Google Sign-In succeeded · token persisted'
+                : 'Google Sign-In succeeded · token kept for this run only',
+            tag: _tag,
+          );
+          await _storage.saveAccessToken(
+            result.value.accessToken,
+            persist: rememberMe,
+          );
           _bumpSession();
           _adoptSessionUser(result.value.user);
         case Failure<AuthSession>():
@@ -698,6 +794,7 @@ class AuthNotifier extends Notifier<AuthState> {
       AppLogger.e('Google Sign-In failed', tag: _tag, error: e);
       state = state.copyWith(isLoading: false, error: 'Google Sign-In failed');
     } finally {
+      deadline?.cancel();
       await server?.close();
     }
   }

@@ -130,7 +130,7 @@ class _CreateOrganizationViewState
                       hintText: 'Enter your organization name',
                       hintStyle: TextStyle(color: colors.textHint),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: colors.background,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(color: colors.divider),
@@ -174,7 +174,7 @@ class _CreateOrganizationViewState
                       hintText: 'What does your organization do?',
                       hintStyle: TextStyle(color: colors.textHint),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: colors.background,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(color: colors.divider),
@@ -242,7 +242,7 @@ class _CreateOrganizationViewState
                         inputDecorationTheme: InputDecorationTheme(
                           hintStyle: TextStyle(color: colors.textHint),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: colors.background,
                           border: border(colors.divider),
                           enabledBorder: border(colors.divider),
                           focusedBorder: border(colors.primary),

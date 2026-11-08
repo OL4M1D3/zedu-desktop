@@ -17,6 +17,7 @@ final _orgProvider = NotifierProvider<_Org, String>(_Org.new);
 /// until the test completes them.
 class _FakeDmRepository implements DmRepository {
   final held = <String, Completer<List<DmConversation>>>{};
+  final requested = <String>[];
 
   void hold(String orgId, int page) =>
       held['$orgId/$page'] = Completer<List<DmConversation>>();
@@ -28,6 +29,7 @@ class _FakeDmRepository implements DmRepository {
     bool recentDm = false,
     String? search,
   }) {
+    requested.add('$orgId/$page');
     final completer = held['$orgId/$page'];
     if (completer != null) return completer.future;
     return Future.value(_fullPage(orgId, page));
@@ -85,6 +87,47 @@ void main() {
         ..._fullPage('org-a', 2),
       ].map((c) => c.channelId),
     );
+  });
+
+  test('two overlapping loadMore calls append the page once', () async {
+    repository.hold('org-a', 2);
+    final notifier = container.read(dmListProvider.notifier);
+
+    final first = notifier.loadMore();
+    final second = notifier.loadMore();
+    repository.held['org-a/2']!.complete(_fullPage('org-a', 2));
+    await Future.wait([first, second]);
+
+    expect(repository.requested.where((key) => key == 'org-a/2').length, 1);
+    final ids = listedIds();
+    expect(ids.toSet().length, ids.length);
+    expect(
+      ids,
+      [
+        ..._fullPage('org-a', 1),
+        ..._fullPage('org-a', 2),
+      ].map((c) => c.channelId),
+    );
+  });
+
+  test('clears the selected DM when the workspace changes', () {
+    final selected = _conversation('channel-from-org-a');
+    container.read(selectedDmProvider.notifier).select(selected);
+
+    expect(container.read(selectedDmProvider), same(selected));
+
+    container.read(_orgProvider.notifier).select('org-b');
+
+    expect(container.read(selectedDmProvider), isNull);
+  });
+
+  test('preserves the selected DM when the workspace does not change', () {
+    final selected = _conversation('channel-from-org-a');
+    container.read(selectedDmProvider.notifier).select(selected);
+
+    container.read(_orgProvider.notifier).select('org-a');
+
+    expect(container.read(selectedDmProvider), same(selected));
   });
 
   test(
@@ -185,5 +228,52 @@ void _noFakeDmTests() {
 
       expect(conversations, [real]);
     });
+
+    test(
+      'returns an empty list when usesMockData is false and API returns empty list',
+      () async {
+        if (locator.isRegistered<AppConfig>()) {
+          locator.unregister<AppConfig>();
+        }
+        locator.registerSingleton<AppConfig>(
+          const AppConfig(apiBaseUrl: '', usesMockData: false),
+        );
+        addTearDown(() {
+          if (locator.isRegistered<AppConfig>()) {
+            locator.unregister<AppConfig>();
+          }
+        });
+
+        final container = containerFor(const []);
+        final conversations = await container.read(dmListProvider.future);
+
+        expect(conversations, isEmpty);
+        expect(container.read(dmListProvider.notifier).hasMore, isFalse);
+      },
+    );
+
+    test(
+      'injects mock conversation when usesMockData is true and API returns empty list',
+      () async {
+        if (locator.isRegistered<AppConfig>()) {
+          locator.unregister<AppConfig>();
+        }
+        locator.registerSingleton<AppConfig>(
+          const AppConfig(apiBaseUrl: '', usesMockData: true),
+        );
+        addTearDown(() {
+          if (locator.isRegistered<AppConfig>()) {
+            locator.unregister<AppConfig>();
+          }
+        });
+
+        final container = containerFor(const []);
+        final conversations = await container.read(dmListProvider.future);
+
+        expect(conversations.length, 1);
+        expect(conversations.first.channelId, 'mock-channel-id-123');
+        expect(conversations.first.username, 'Test User');
+      },
+    );
   });
 }

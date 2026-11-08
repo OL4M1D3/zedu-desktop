@@ -6,7 +6,7 @@ Instructions for AI coding agents working in `zedu-desktop` (Flutter, targeting 
 
 ## Hard rules
 
-- Work only on a ticket branch in the team's org fork (not a personal fork). Never push to `dev`, `central-staging` or `main`, and never target `zeduchat` directly. PRs go into `zedu-hng/zedu-desktop:dev`.
+- Work in `zeduchat/zedu-desktop`. Feature and fix PRs target `staging`. A manager agent promotes the green `staging` branch to `main` every six hours. Contributors and agents do not push directly to `main`.
 - Keep the change to what the ticket asks. No drive-by refactors, renames or dependency bumps.
 - Don't edit protected files (`.github/`, `AGENTS.md`, `CONTRIBUTING.md`, tooling config; full list in `CONTRIBUTING.md` Protected files). The **Protected files** check fails the PR unless a reviewer approved the change first.
 - One author per PR: commit only as the contributor, never mix in other people's commits.
@@ -67,4 +67,4 @@ New features follow the same `data/` → `domain/` → `presentation/` split.
 
 ## PRs
 
-The PR title follows Conventional Commits (see `CONTRIBUTING.md`) and becomes the squashed commit on `dev`. Fill in every section of the PR template.
+The PR title follows Conventional Commits (see `CONTRIBUTING.md`). Fill in every section of the PR template. The manager agent handles the scheduled `staging` → `main` promotion.

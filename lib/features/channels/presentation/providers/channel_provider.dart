@@ -127,6 +127,7 @@ class ChannelNotifier extends AsyncNotifier<List<Channel>> {
             topic: topic ?? c.topic,
             unreadCount: c.unreadCount,
             membersCount: c.membersCount,
+            hasAccess: c.hasAccess,
           );
         }
         return c;
@@ -149,6 +150,48 @@ class ChannelNotifier extends AsyncNotifier<List<Channel>> {
           if (c.id != channelId) c,
       ]);
     }
+    return result;
+  }
+
+  /// Joins the channel and, on success, marks it as joined in the list.
+  Future<Result<void>> joinChannel(String channelId) async {
+    final result = await ref
+        .read(channelRepositoryProvider)
+        .joinChannel(channelId);
+    if (result is Success<void>) {
+      state = AsyncData([
+        for (final c in state.value ?? const <Channel>[])
+          if (c.id == channelId) c.copyWith(hasAccess: true) else c,
+      ]);
+    }
+    return result;
+  }
+
+  /// Archives or unarchives the channel. On success an archived channel
+  /// leaves the list and an unarchived one comes back. A failure leaves the
+  /// list as it was and is returned for the caller to show.
+  Future<Result<void>> archiveChannel(
+    Channel channel, {
+    required bool archived,
+  }) async {
+    final orgId = ref.read(workspaceProvider).selectedWorkspace?.id;
+    final result = await ref
+        .read(channelRepositoryProvider)
+        .archiveChannel(channel.id, archived);
+    if (result is! Success<void>) return result;
+
+    ref.invalidate(archivedChannelsProvider);
+    // build() has already reloaded the list for a newer workspace.
+    if (ref.read(workspaceProvider).selectedWorkspace?.id != orgId) {
+      return result;
+    }
+    final others = [
+      for (final c in state.value ?? const <Channel>[])
+        if (c.id != channel.id) c,
+    ];
+    state = AsyncData(
+      archived ? others : [...others, channel.copyWith(archived: false)],
+    );
     return result;
   }
 }

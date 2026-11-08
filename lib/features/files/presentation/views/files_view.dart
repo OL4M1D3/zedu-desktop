@@ -13,6 +13,10 @@ class FilesView extends ConsumerWidget {
     final title = state.folderPath.isEmpty
         ? state.view.label
         : state.folderPath.last.name;
+    // Folders are one level deep on the backend: it ignores parent_id, so
+    // inside a folder there are no subfolders to list or create.
+    final inFolder = state.folderPath.isNotEmpty;
+    final tab = inFolder ? FilesTab.files : state.tab;
 
     return Container(
       color: colors.onPrimary,
@@ -42,12 +46,14 @@ class FilesView extends ConsumerWidget {
                 if (state.view != FilesScope.trash) ...[
                   const _UploadButton(),
                   const SizedBox(width: 12),
-                  _HeaderButton(
-                    icon: Icons.create_new_folder_outlined,
-                    label: 'New Folder',
-                    onPressed: () => _newFolder(context),
-                  ),
-                  const SizedBox(width: 8),
+                  if (!inFolder) ...[
+                    _HeaderButton(
+                      icon: Icons.create_new_folder_outlined,
+                      label: 'New Folder',
+                      onPressed: () => _newFolder(context),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ],
                 IconButton(
                   tooltip: 'Refresh',
@@ -72,10 +78,12 @@ class FilesView extends ConsumerWidget {
                   _Breadcrumbs(state: state),
                 ],
                 const SizedBox(height: 16),
-                _Tabs(selected: state.tab),
-                const SizedBox(height: 24),
+                if (!inFolder) ...[
+                  _Tabs(selected: tab),
+                  const SizedBox(height: 24),
+                ],
                 Text(
-                  state.tab == FilesTab.folders ? 'Folders' : 'Files',
+                  tab == FilesTab.folders ? 'Folders' : 'Files',
                   style: context.textTheme.titleMedium?.copyWith(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -83,7 +91,7 @@ class FilesView extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (state.tab == FilesTab.folders)
+                if (tab == FilesTab.folders)
                   const _FoldersSection()
                 else
                   const _FilesSection(),
@@ -224,6 +232,7 @@ class _FoldersSection extends ConsumerWidget {
               folders: page.folders,
               ownerNameOf: ownerName,
               onOpen: notifier.openFolder,
+              onDelete: (folder) => _deleteFolder(context, ref, folder),
             ),
             if (page.totalPages > 1)
               _Pagination(
@@ -268,11 +277,133 @@ class _FilesSection extends ConsumerWidget {
     }
   }
 
+  Future<void> _download(
+    BuildContext context,
+    WidgetRef ref,
+    WorkspaceFile file,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final outcome = await ref
+        .read(fileDownloadsProvider.notifier)
+        .download(file);
+    if (!overlay.mounted) return;
+    switch (outcome.status) {
+      case FileDownloadStatus.cancelled:
+        return;
+      case FileDownloadStatus.saved:
+        final folder = _folderName(outcome.path!);
+        AppToastService.showWith(
+          overlay,
+          type: AppToastType.success,
+          message: folder.isEmpty
+              ? 'Downloaded ${file.name}.'
+              : 'Downloaded ${file.name} to $folder.',
+        );
+      case FileDownloadStatus.failed:
+        AppToastService.showWith(
+          overlay,
+          type: AppToastType.error,
+          message: outcome.message!,
+        );
+    }
+  }
+
+  Future<void> _rename(BuildContext context, WorkspaceFile file) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final newName = await RenameFileDialog.show(context, file: file);
+    if (newName == null || !overlay.mounted) return;
+    AppToastService.showWith(
+      overlay,
+      type: AppToastType.success,
+      message: 'Renamed ${file.name} to $newName.',
+    );
+  }
+
+  Future<void> _move(BuildContext context, WorkspaceFile file) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final folder = await MoveFileDialog.show(context, file: file);
+    if (folder == null || !overlay.mounted) return;
+    AppToastService.showWith(
+      overlay,
+      type: AppToastType.success,
+      message: 'Moved ${file.name} to ${folder.name}.',
+    );
+  }
+
+  Future<void> _share(BuildContext context, WorkspaceFile file) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final outcome = await ShareFileDialog.show(context, file: file);
+    if (outcome == null || !overlay.mounted) return;
+    AppToastService.showWith(
+      overlay,
+      type: outcome.complete ? AppToastType.success : AppToastType.info,
+      message: outcome.message,
+    );
+  }
+
+  void _preview(BuildContext context, WidgetRef ref, WorkspaceFile file) =>
+      FilePreviewDialog.show(
+        context,
+        file: file,
+        onDownload: () {
+          if (context.mounted) _download(context, ref, file);
+        },
+        onOpenExternally: () {
+          if (context.mounted) _open(context, file);
+        },
+      );
+
+  Future<void> _togglePin(
+    BuildContext context,
+    WidgetRef ref,
+    WorkspaceFile file,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final error = await ref.read(pinnedFilesProvider.notifier).toggle(file);
+    if (error == null || !overlay.mounted) return;
+    AppToastService.showWith(overlay, type: AppToastType.error, message: error);
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WorkspaceFile file, {
+    required bool permanent,
+  }) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final deleted = await DeleteFileDialog.show(
+      context,
+      file: file,
+      permanent: permanent,
+    );
+    if (!deleted || !overlay.mounted) return;
+    AppToastService.showWith(
+      overlay,
+      type: AppToastType.success,
+      message: permanent
+          ? 'Deleted ${file.name} permanently.'
+          : 'Moved ${file.name} to Deleted files.',
+    );
+  }
+
+  /// Name of the folder holding [path], such as `Downloads`.
+  static String _folderName(String path) {
+    final parts = path.split(RegExp(r'[\\/]'))..removeWhere((p) => p.isEmpty);
+    return parts.length < 2 ? '' : parts[parts.length - 2];
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final page = ref.watch(filesListProvider);
     final sort = ref.watch(filesProvider.select((s) => s.sort));
+    final scope = ref.watch(filesProvider.select((s) => s.view));
+    final downloads = ref.watch(fileDownloadsProvider);
+    final isTrash = scope == FilesScope.trash;
+    // Deleted files can't be pinned, so they show no pins either.
+    final pinnedIds = isTrash
+        ? const <String>{}
+        : ref.watch(pinnedFilesProvider).value ?? const <String>{};
     final ownerName = _ownerNames(ref);
+    final myId = ref.watch(authNotifierProvider.select((s) => s.user?.id));
 
     return page.when(
       loading: () => const _Loading(),
@@ -291,15 +422,62 @@ class _FilesSection extends ConsumerWidget {
                 'Files in this list, or that match your filters, appear here.',
           );
         }
+        Widget table(List<WorkspaceFile> files) => FilesTable(
+          files: files,
+          ownerNameOf: (file) =>
+              file.owner.isNotEmpty ? file.owner : ownerName(file.userId),
+          // Clicking a file previews it in the app, as on web. Deleted files
+          // still open outside it.
+          onOpen: isTrash
+              ? (file) => _open(context, file)
+              : (file) => _preview(context, ref, file),
+          downloads: downloads,
+          pinnedIds: pinnedIds,
+          onDownload: isTrash ? null : (file) => _download(context, ref, file),
+          onPreview: isTrash ? null : (file) => _preview(context, ref, file),
+          onTogglePin: isTrash
+              ? null
+              : (file) => _togglePin(context, ref, file),
+          onRename: isTrash ? null : (file) => _rename(context, file),
+          onMove: isTrash ? null : (file) => _move(context, file),
+          onShare: isTrash ? null : (file) => _share(context, file),
+          // zedu-be lets only the person who uploaded a file share it, so
+          // other people's files don't offer a Share that can only fail.
+          canShare: (file) => myId != null && file.userId == myId,
+          onInfo: isTrash
+              ? null
+              : (file) => FileInfoPanel.show(
+                  context,
+                  file: file,
+                  owner: file.owner.isNotEmpty
+                      ? file.owner
+                      : ownerName(file.userId),
+                ),
+          onDelete: (file) => _delete(context, file, permanent: isTrash),
+          deletesPermanently: isTrash,
+        );
+
+        // Pinned files on this page come first, under their own heading, as
+        // on web.
+        final files = sort.apply(page.files);
+        final pinned = [
+          for (final f in files)
+            if (pinnedIds.contains(f.id)) f,
+        ];
+        final others = [
+          for (final f in files)
+            if (!pinnedIds.contains(f.id)) f,
+        ];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FilesTable(
-              files: sort.apply(page.files),
-              ownerNameOf: (file) =>
-                  file.owner.isNotEmpty ? file.owner : ownerName(file.userId),
-              onOpen: (file) => _open(context, file),
-            ),
+            if (pinned.isNotEmpty) ...[
+              const _PinnedHeading(),
+              const SizedBox(height: 8),
+              table(pinned),
+              if (others.isNotEmpty) const SizedBox(height: 24),
+            ],
+            if (others.isNotEmpty) table(others),
             if (page.totalPages > 1)
               _Pagination(
                 current: page.currentPage,
@@ -365,6 +543,47 @@ Future<void> _newFolder(BuildContext context) async {
   }
 }
 
+Future<void> _deleteFolder(
+  BuildContext context,
+  WidgetRef ref,
+  FileFolder folder,
+) async {
+  final colors = context.colors;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: colors.onPrimary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      title: Text('Delete "${folder.name}"?'),
+      content: const Text(
+        'The folder and everything inside it will be deleted.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.error,
+            foregroundColor: colors.onPrimary,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final error = await ref
+      .read(filesActionsProvider.notifier)
+      .deleteFolder(folder);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(error ?? 'Folder deleted')));
+}
+
 /// Picks files and uploads them, showing progress on the button.
 class _UploadButton extends ConsumerWidget {
   const _UploadButton();
@@ -386,7 +605,11 @@ class _UploadButton extends ConsumerWidget {
         .uploadFiles(files);
     if (!context.mounted) return;
     final failed = outcome.failedNames;
-    final message = failed.isEmpty
+    final message = outcome.workspaceChanged
+        ? 'Workspace changed. ${outcome.skippedNames.length} remaining files '
+              'were not uploaded. A file already in progress may have '
+              'completed in the previous workspace.'
+        : failed.isEmpty
         ? (outcome.uploaded == 1
               ? 'File uploaded'
               : '${outcome.uploaded} files uploaded')
@@ -516,6 +739,30 @@ class _Message extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// "Pinned files", over the files the user pinned.
+class _PinnedHeading extends StatelessWidget {
+  const _PinnedHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      children: [
+        Icon(Icons.push_pin_outlined, size: 16, color: colors.textSecondary),
+        const SizedBox(width: 6),
+        Text(
+          'Pinned files',
+          style: context.textTheme.bodyMedium?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

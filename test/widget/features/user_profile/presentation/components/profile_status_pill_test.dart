@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zedu/features/features.dart';
 
@@ -11,6 +12,32 @@ void main() {
       );
 
       expect(find.text('Active'), findsOneWidget);
+      final container = tester.widget<Container>(
+        find.descendant(
+          of: find.byType(ProfileStatusPill),
+          matching: find.byType(Container).first,
+        ),
+      );
+      final decoration = container.decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xFFECFDF5));
+    });
+
+    testWidgets('renders pending status with neutral amber styling', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestMaterialApp(const ProfileStatusPill(status: 'pending')),
+      );
+
+      expect(find.text('Pending'), findsOneWidget);
+      final container = tester.widget<Container>(
+        find.descendant(
+          of: find.byType(ProfileStatusPill),
+          matching: find.byType(Container).first,
+        ),
+      );
+      final decoration = container.decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xFFFFF7ED));
     });
 
     testWidgets('renders non-active status with capitalization', (
@@ -21,6 +48,14 @@ void main() {
       );
 
       expect(find.text('Inactive'), findsOneWidget);
+      final container = tester.widget<Container>(
+        find.descendant(
+          of: find.byType(ProfileStatusPill),
+          matching: find.byType(Container).first,
+        ),
+      );
+      final decoration = container.decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xFFFEF2F2));
     });
 
     testWidgets('handles empty status string without throwing RangeError', (

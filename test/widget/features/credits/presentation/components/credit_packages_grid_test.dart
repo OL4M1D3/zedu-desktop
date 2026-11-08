@@ -89,5 +89,31 @@ void main() {
           gridView.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
       expect(delegate.crossAxisCount, 3);
     });
+
+    testWidgets('renders API price and name instead of hardcoded plans', (
+      tester,
+    ) async {
+      await pumpGridAtWidth(
+        tester,
+        width: 1200,
+        packages: const [
+          CreditPackage(
+            id: 'pkg_api',
+            name: 'Starter',
+            description: 'From the API',
+            price: 42,
+            credits: 1200,
+            benefits: ['API benefit'],
+            planSlug: 'starter',
+          ),
+        ],
+      );
+
+      expect(find.text('Starter'), findsOneWidget);
+      expect(find.text(r'$42'), findsOneWidget);
+      expect(find.text('1.2K AI credits included'), findsOneWidget);
+      expect(find.text('Pro Plus'), findsNothing);
+      expect(find.text(r'$20'), findsNothing);
+    });
   });
 }

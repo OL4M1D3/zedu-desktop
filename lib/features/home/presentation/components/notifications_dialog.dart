@@ -180,13 +180,15 @@ class _UnreadDmRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Container(
+              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+              alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: colors.primary,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '${conversation.unreadCount}',
+                conversation.unreadCount.unreadBadgeText,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,

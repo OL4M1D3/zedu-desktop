@@ -177,7 +177,8 @@ class _MemberGrid extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Showing ${list.members.length} of ${list.total} members',
+                    'Showing ${list.members.length} of '
+                    '${list.total.countLabel('member')}',
                     style: context.textTheme.bodyMedium?.copyWith(
                       fontSize: 13,
                       color: colors.textHint,

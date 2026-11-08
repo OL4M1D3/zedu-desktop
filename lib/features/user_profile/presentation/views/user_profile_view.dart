@@ -1,11 +1,30 @@
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
-class UserProfileView extends ConsumerWidget {
+class UserProfileView extends ConsumerStatefulWidget {
   const UserProfileView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserProfileView> createState() => _UserProfileViewState();
+}
+
+class _UserProfileViewState extends ConsumerState<UserProfileView> {
+  final _notificationsKey = GlobalKey<NotificationsSectionState>();
+
+  /// Leaving Notifications disposes its unsaved edits, so it gets to ask first.
+  Future<void> _selectSection(UserProfileSection section) async {
+    final current = ref.read(userProfileNotifierProvider).section;
+    if (current == UserProfileSection.notifications &&
+        section != current &&
+        !(await _notificationsKey.currentState?.confirmLeave() ?? true)) {
+      return;
+    }
+    if (!mounted) return;
+    ref.read(userProfileNotifierProvider.notifier).selectSection(section);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     ref.listen<UserProfileState>(userProfileNotifierProvider, (previous, next) {
       if (next.error != null && previous?.error != next.error) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -39,11 +58,12 @@ class UserProfileView extends ConsumerWidget {
 
     return ProfileSettingsShell(
       selectedSection: state.section,
-      onSectionSelected: notifier.selectSection,
+      onSectionSelected: _selectSection,
       child: _ProfileContent(
         state: state,
         notifier: notifier,
         authenticatedUser: authenticatedUser,
+        notificationsKey: _notificationsKey,
         workspaceName: workspaceName,
       ),
     );
@@ -55,12 +75,14 @@ class _ProfileContent extends StatelessWidget {
     required this.state,
     required this.notifier,
     required this.authenticatedUser,
+    required this.notificationsKey,
     required this.workspaceName,
   });
 
   final UserProfileState state;
   final UserProfileNotifier notifier;
   final User? authenticatedUser;
+  final GlobalKey<NotificationsSectionState> notificationsKey;
   final String? workspaceName;
 
   static const padding = EdgeInsets.fromLTRB(28, 32, 40, 48);
@@ -89,6 +111,7 @@ class _ProfileContent extends StatelessWidget {
         );
       }
       return NotificationsSection(
+        key: notificationsKey,
         preferences: notifications,
         isSaving: state.isSaving,
         onSave: notifier.updateNotificationPreferences,
@@ -117,7 +140,9 @@ class _ProfileContent extends StatelessWidget {
               onDelete: notifier.deleteAccount,
             ),
             UserProfileSection.notifications => const SizedBox.shrink(),
-            UserProfileSection.shortcuts => const ShortcutsSection(),
+            UserProfileSection.desktop => DesktopSection(
+              controller: locator<WindowHotkeyController>(),
+            ),
             UserProfileSection.security => SecuritySection(
               sessions: state.securitySessions,
               isSaving: state.isSaving,
@@ -132,7 +157,6 @@ class _ProfileContent extends StatelessWidget {
                     )
                   : OrganizationSection(
                       organization: organization,
-                      isSaving: state.isSaving,
                       onSave: notifier.updateOrganization,
                       onDelete: notifier.deleteOrganization,
                       onLeave: notifier.leaveOrganization,
@@ -147,9 +171,12 @@ class _ProfileContent extends StatelessWidget {
             UserProfileSection.rolesAndPermissions =>
               RolesAndPermissionsSection(roles: state.rolesAndPermissions),
             UserProfileSection.webhooks => const WebhooksSection(),
+            UserProfileSection.channelManagement =>
+              const ChannelManagementSection(),
             UserProfileSection.billing => BillingSection(
               billing: state.billing ?? BillingInfo.empty(),
               onInvite: notifier.inviteMember,
+              onComparePlans: () => context.go(AppRouter.buyCredits),
             ),
           },
         ),

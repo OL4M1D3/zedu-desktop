@@ -53,15 +53,64 @@ void main() {
       },
     );
   });
+
+  group('UserProfileRemoteDataSourceImpl.inviteMember response', () {
+    test('a created response without an invitations list is a sent invite, '
+        'as zedu-be answers', () async {
+      final member = await _inviteWith({'errors': <String>[]});
+
+      expect(member.email, 'invitee@example.com');
+      expect(member.status, TeamMemberStatus.pending);
+    });
+
+    test('fails when the response names the email as not invited', () async {
+      await expectLater(
+        _inviteWith({
+          'errors': ['could not generate token for invitee@example.com: boom'],
+        }),
+        throwsA(isA<ApiFailure>()),
+      );
+    });
+  });
+
+  group(
+    'UserProfileRemoteDataSourceImpl.inviteMember Referer (Ziki #2708)',
+    () {
+      test(
+        'sends the web app address so the emailed link has a host',
+        () async {
+          final captured = await _captureInvite(
+            invitations: const [],
+            roleName: null,
+          );
+
+          // zedu-be builds the link as Referer + 'accept_org_invitation?...'.
+          expect(captured.headers['Referer'], 'https://example.com/');
+        },
+      );
+
+      test('uses WEB_APP_URL when it is set', () async {
+        final captured = await _captureInvite(
+          invitations: const [],
+          roleName: null,
+          webAppUrl: 'https://app.zedu.chat',
+        );
+
+        expect(captured.headers['Referer'], 'https://app.zedu.chat/');
+      });
+    },
+  );
 }
 
 Future<RequestOptions> _captureInvite({
   required List<dynamic> invitations,
   required String? roleName,
+  String webAppUrl = '',
 }) async {
   final config = AppConfig(
     apiBaseUrl: 'https://api.example.com/api/v1/',
     usesMockData: false,
+    webAppUrl: webAppUrl,
   );
   final dio = Dio();
   RequestOptions? captured;
@@ -95,7 +144,10 @@ Future<RequestOptions> _captureInvite({
   return captured!;
 }
 
-Future<TeamMember> _invite({required List<dynamic> invitations}) async {
+Future<TeamMember> _invite({required List<dynamic> invitations}) =>
+    _inviteWith({'invitations': invitations});
+
+Future<TeamMember> _inviteWith(Map<String, dynamic> data) async {
   final config = AppConfig(
     apiBaseUrl: 'https://api.example.com/api/v1/',
     usesMockData: false,
@@ -107,9 +159,7 @@ Future<TeamMember> _invite({required List<dynamic> invitations}) async {
         handler.resolve(
           Response<Map<String, dynamic>>(
             requestOptions: options,
-            data: {
-              'data': {'invitations': invitations},
-            },
+            data: {'data': data},
           ),
         );
       },

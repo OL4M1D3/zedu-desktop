@@ -59,7 +59,11 @@ class _CreateChannelModalState extends ConsumerState<CreateChannelModal> {
       case Failure<Channel>(:final error):
         setState(() {
           _isCreating = false;
-          _errorMessage = error.message;
+          _errorMessage = switch (error.kind) {
+            ApiFailureKind.unknown || ApiFailureKind.parsing =>
+              'Could not create the channel. Please try again.',
+            _ => error.friendlyMessage,
+          };
         });
     }
   }
@@ -109,7 +113,9 @@ class _CreateChannelModalState extends ConsumerState<CreateChannelModal> {
               // Ready to type on open, and Enter creates the channel.
               autofocus: true,
               textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _createChannel(),
+              onSubmitted: (_) {
+                if (!_isCreating) _createChannel();
+              },
               onChanged: (_) {
                 if (_errorMessage != null) {
                   setState(() => _errorMessage = null);

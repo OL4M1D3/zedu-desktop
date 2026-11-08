@@ -8,6 +8,7 @@ export 'utils/utils.dart';
 export 'theme/theme.dart';
 export 'widgets/widgets.dart';
 export 'window/window_bounds_controller.dart';
+export 'window/window_hotkey.dart';
 export 'packages/packages.dart';
 export 'package:flutter/material.dart';
 export 'package:flutter/foundation.dart';

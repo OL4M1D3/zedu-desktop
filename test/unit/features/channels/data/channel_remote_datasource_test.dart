@@ -78,4 +78,181 @@ void main() {
       );
     });
   });
+
+  group('ChannelRemoteDataSourceImpl.updateChannelTopicOrDescription', () {
+    late MockApiBaseService mockApi;
+    late ChannelRemoteDataSourceImpl datasource;
+
+    setUp(() {
+      mockApi = MockApiBaseService();
+      datasource = ChannelRemoteDataSourceImpl(apiBaseService: mockApi);
+    });
+
+    void stubPatch(Map<String, dynamic> body) {
+      when(
+        () => mockApi.patch<Map<String, dynamic>>(
+          path: '/channels/ch-1',
+          data: body,
+        ),
+      ).thenAnswer(
+        (_) async => const ApiResponseModel<Map<String, dynamic>>(
+          data: {'status': 'success'},
+          statusCode: 200,
+        ),
+      );
+    }
+
+    test('saves the topic with PATCH /channels/{id}', () async {
+      stubPatch({'topic': 'Release notes'});
+
+      await datasource.updateChannelTopicOrDescription(
+        channelId: 'ch-1',
+        topic: 'Release notes',
+      );
+
+      verify(
+        () => mockApi.patch<Map<String, dynamic>>(
+          path: '/channels/ch-1',
+          data: {'topic': 'Release notes'},
+        ),
+      ).called(1);
+    });
+
+    test('saves the description with PATCH /channels/{id}', () async {
+      stubPatch({'description': 'Where we plan launches'});
+
+      await datasource.updateChannelTopicOrDescription(
+        channelId: 'ch-1',
+        description: 'Where we plan launches',
+      );
+
+      verify(
+        () => mockApi.patch<Map<String, dynamic>>(
+          path: '/channels/ch-1',
+          data: {'description': 'Where we plan launches'},
+        ),
+      ).called(1);
+    });
+  });
+
+  group('ChannelRemoteDataSourceImpl.fetchChannels (Ziki #1433)', () {
+    late MockApiBaseService mockApi;
+    late ChannelRemoteDataSourceImpl datasource;
+    const pageSize = ChannelRemoteDataSourceImpl.channelPageSize;
+
+    setUp(() {
+      mockApi = MockApiBaseService();
+      datasource = ChannelRemoteDataSourceImpl(apiBaseService: mockApi);
+      // fetchChannels also merges unread counts from user-channels.
+      when(
+        () => mockApi.get<Map<String, dynamic>>(
+          path: '/organisations/org-1/user-channels',
+        ),
+      ).thenAnswer(
+        (_) async => const ApiResponseModel<Map<String, dynamic>>(
+          data: {'data': <Map<String, dynamic>>[]},
+          statusCode: 200,
+        ),
+      );
+    });
+
+    List<Map<String, dynamic>> channels(int from, int count) => [
+      for (var i = from; i < from + count; i++)
+        {'channels_id': 'c$i', 'name': 'channel-$i'},
+    ];
+
+    void stubPage(
+      int page,
+      List<Map<String, dynamic>> data, {
+      Map<String, dynamic>? pagination,
+    }) {
+      when(
+        () => mockApi.get<Map<String, dynamic>>(
+          path: '/organisations/org-1/channels',
+          queryParameters: {'page': page, 'limit': pageSize},
+        ),
+      ).thenAnswer(
+        (_) async => ApiResponseModel<Map<String, dynamic>>(
+          data: {'data': data, 'pagination': ?pagination},
+          statusCode: 200,
+        ),
+      );
+    }
+
+    test('loads every page, not just the first', () async {
+      stubPage(
+        1,
+        channels(0, pageSize),
+        pagination: {'current_page': 1, 'total_pages': 2},
+      );
+      stubPage(
+        2,
+        channels(pageSize, 5),
+        pagination: {'current_page': 2, 'total_pages': 2},
+      );
+
+      final result = await datasource.fetchChannels('org-1');
+
+      expect(result.length, pageSize + 5);
+      expect(result.first.id, 'c0');
+      expect(result.last.id, 'c${pageSize + 4}');
+    });
+
+    test('stops at the last page the server reports', () async {
+      stubPage(
+        1,
+        channels(0, pageSize),
+        pagination: {'current_page': 1, 'total_pages': 1},
+      );
+
+      final result = await datasource.fetchChannels('org-1');
+
+      expect(result.length, pageSize);
+      verify(
+        () => mockApi.get<Map<String, dynamic>>(
+          path: '/organisations/org-1/channels',
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).called(1);
+    });
+
+    test('a short page without pagination info is the last one', () async {
+      stubPage(1, channels(0, 3));
+
+      expect((await datasource.fetchChannels('org-1')).length, 3);
+      verify(
+        () => mockApi.get<Map<String, dynamic>>(
+          path: '/organisations/org-1/channels',
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).called(1);
+    });
+
+    test('an empty organisation has no channels', () async {
+      stubPage(1, const []);
+
+      expect(await datasource.fetchChannels('org-1'), isEmpty);
+    });
+
+    test('a list that never ends stops at the page cap', () async {
+      when(
+        () => mockApi.get<Map<String, dynamic>>(
+          path: '/organisations/org-1/channels',
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer(
+        (_) async => ApiResponseModel<Map<String, dynamic>>(
+          data: {'data': channels(0, pageSize)},
+          statusCode: 200,
+        ),
+      );
+
+      final result = await datasource.fetchChannels('org-1');
+
+      expect(
+        result.length,
+        pageSize * ChannelRemoteDataSourceImpl.maxChannelPages,
+      );
+    });
+  });
 }

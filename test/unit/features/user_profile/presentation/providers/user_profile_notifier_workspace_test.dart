@@ -69,10 +69,20 @@ void main() {
       storage = MockSecureStorageService();
       organizationCalls = 0;
       locator.registerSingleton<SecureStorageService>(storage);
+      locator.registerSingleton<AppConfig>(
+        const AppConfig(
+          apiBaseUrl: 'https://api.example.com',
+          usesMockData: false,
+        ),
+      );
 
       when(() => repo.getAccount()).thenAnswer((_) => _failed());
-      when(() => repo.getSecuritySessions()).thenAnswer((_) => _failed());
-      when(() => repo.getRolesAndPermissions()).thenAnswer((_) => _failed());
+      when(
+        () => repo.getSecuritySessions(userId: any(named: 'userId')),
+      ).thenAnswer((_) => _failed());
+      when(
+        () => repo.getRolesAndPermissions(orgId: any(named: 'orgId')),
+      ).thenAnswer((_) => _failed());
       when(() => repo.getBillingInfo()).thenAnswer((_) => _failed());
       when(
         () => repo.getNotificationPreferences(orgId: any(named: 'orgId')),
@@ -300,11 +310,21 @@ void main() {
       repo = MockUserProfileRepository();
       storage = MockSecureStorageService();
       locator.registerSingleton<SecureStorageService>(storage);
+      locator.registerSingleton<AppConfig>(
+        const AppConfig(
+          apiBaseUrl: 'https://api.example.com',
+          usesMockData: false,
+        ),
+      );
 
       when(() => storage.readData(any())).thenAnswer((_) async => null);
       when(() => repo.getAccount()).thenAnswer((_) => _failed());
-      when(() => repo.getSecuritySessions()).thenAnswer((_) => _failed());
-      when(() => repo.getRolesAndPermissions()).thenAnswer((_) => _failed());
+      when(
+        () => repo.getSecuritySessions(userId: any(named: 'userId')),
+      ).thenAnswer((_) => _failed());
+      when(
+        () => repo.getRolesAndPermissions(orgId: any(named: 'orgId')),
+      ).thenAnswer((_) => _failed());
       when(() => repo.getBillingInfo()).thenAnswer((_) => _failed());
       when(
         () => repo.getNotificationPreferences(orgId: any(named: 'orgId')),

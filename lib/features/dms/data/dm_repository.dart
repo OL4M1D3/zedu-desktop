@@ -54,6 +54,21 @@ class DmRepository {
     );
   }
 
+  /// Searches the whole history of one conversation on the server, not just
+  /// the messages loaded on screen.
+  Future<List<ConversationSearchHit>> searchMessages({
+    required String channelId,
+    required String query,
+  }) async {
+    final trimmed = query.trim();
+    if (channelId.isEmpty || trimmed.isEmpty) return const [];
+    final response = await _apiClient.get<Map<String, dynamic>>(
+      path: '/search/channel/$channelId',
+      queryParameters: {'query': trimmed, 'sortBy': 'relevance'},
+    );
+    return ConversationSearchHit.fromResponse(response.data['data']);
+  }
+
   Future<List<Map<String, dynamic>>> getMessages(
     String channelId, {
     int page = 1,
@@ -208,6 +223,20 @@ class DmRepository {
     );
   }
 
+  /// Pins a message for everyone in the conversation, through the route the
+  /// web app uses for channels and DMs alike.
+  Future<void> pinMessage({
+    required String threadId,
+    required String channelId,
+  }) async {
+    await _apiClient.post<Map<String, dynamic>>(
+      path: '/channels/pin/$channelId/thread',
+      data: {'thread_id': threadId},
+    );
+  }
+
+  /// `PUT /dms/messages/:channelId`: zedu-be takes the conversation in the
+  /// path and the edited message as `thread_id` in the body.
   Future<void> editMessage(
     String channelId, {
     required String content,

@@ -8,7 +8,7 @@ class FakeWorkspaceNotifier extends WorkspaceNotifier {
     id: '1',
     name: 'commabuster',
     avatar: '',
-    channelsCount: 12,
+    membersCount: 12,
   );
 
   @override
@@ -172,7 +172,7 @@ void main() {
       },
     );
 
-    testWidgets('plus button opens the New Group Chat page', (tester) async {
+    testWidgets('compose button opens the New Group Chat page', (tester) async {
       await useTestWindow(tester);
       await tester.pumpWidget(buildHeaderUnderTest());
       await tester.pump();
@@ -185,7 +185,7 @@ void main() {
         isNot(ActiveChatType.newGroupChat),
       );
 
-      await tester.tap(find.byIcon(Icons.add));
+      await tester.tap(find.byIcon(Icons.edit_note));
       await tester.pump();
 
       expect(
@@ -194,15 +194,26 @@ void main() {
       );
     });
 
-    testWidgets('plus button has a tooltip for accessibility', (tester) async {
+    testWidgets('compose button has a tooltip for accessibility', (
+      tester,
+    ) async {
       await useTestWindow(tester);
       await tester.pumpWidget(buildHeaderUnderTest());
       await tester.pump();
 
       final iconButton = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.add),
+        find.widgetWithIcon(IconButton, Icons.edit_note),
       );
       expect(iconButton.tooltip, 'New conversation');
+    });
+
+    testWidgets('add action uses a compose icon', (tester) async {
+      await useTestWindow(tester);
+
+      await tester.pumpWidget(buildHeaderUnderTest());
+      await tester.pump();
+
+      expect(find.widgetWithIcon(IconButton, Icons.edit_note), findsOneWidget);
     });
   });
 }

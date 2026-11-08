@@ -26,7 +26,10 @@ List<QuickSwitcherEntry> filterQuickSwitcherEntries(
   List<QuickSwitcherEntry> entries,
   String query,
 ) {
-  final needle = query.trim().toLowerCase();
+  var needle = query.trim().toLowerCase();
+  if (needle.startsWith("#") || needle.startsWith("@")) {
+    needle = needle.substring(1).trim();
+  }
   if (needle.isEmpty) return entries;
 
   final starts = <QuickSwitcherEntry>[];

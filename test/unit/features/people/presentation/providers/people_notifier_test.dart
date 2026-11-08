@@ -51,6 +51,44 @@ class _FakePeopleRepository implements PeopleRepository {
   }
 }
 
+class _SwitchableOrg extends Notifier<String> {
+  @override
+  String build() => 'org-a';
+
+  void select(String orgId) => state = orgId;
+}
+
+final _switchableOrgProvider = NotifierProvider<_SwitchableOrg, String>(
+  _SwitchableOrg.new,
+);
+
+/// Returns one member per org page, except held pages which wait until the
+/// test completes them.
+class _HeldPagePeopleRepository implements PeopleRepository {
+  final held = <String, Completer<Result<MembersPage>>>{};
+
+  void hold(String orgId, int page) =>
+      held['$orgId/$page'] = Completer<Result<MembersPage>>();
+
+  MembersPage _page(String orgId, int page) => MembersPage(
+    members: [OrgMember(id: '$orgId-m$page', name: '$orgId member $page')],
+    currentPage: page,
+    totalPages: 2,
+    totalItems: 2,
+  );
+
+  @override
+  Future<Result<MembersPage>> fetchMembers({
+    required String orgId,
+    int page = 1,
+    String search = '',
+  }) {
+    final completer = held['$orgId/$page'];
+    if (completer != null) return completer.future;
+    return Future.value(Success(_page(orgId, page)));
+  }
+}
+
 void main() {
   late _FakePeopleRepository people;
   late MockDmRepository dms;
@@ -110,7 +148,121 @@ void main() {
       expect(list.members, hasLength(2));
       expect(list.loadMoreFailed, isTrue);
       expect(list.hasMore, isTrue);
+
+      // The guard must not keep blocking once the failure is reported.
+      people.failPage2 = false;
+      await container.read(peopleListProvider('').notifier).loadMore();
+
+      final retried = container.read(peopleListProvider('')).value!;
+      expect(retried.members.map((m) => m.id), ['u-1', 'u-2', 'u-3']);
+      expect(retried.loadMoreFailed, isFalse);
+      expect(retried.hasMore, isFalse);
     });
+
+    test(
+      'a load more from the previous workspace is dropped after a switch',
+      () async {
+        final repository = _HeldPagePeopleRepository();
+        final workspaceContainer = ProviderContainer(
+          overrides: [
+            currentOrgIdProvider.overrideWith(
+              (ref) => ref.watch(_switchableOrgProvider),
+            ),
+            peopleRepositoryProvider.overrideWithValue(repository),
+          ],
+        );
+        addTearDown(workspaceContainer.dispose);
+
+        final sub = workspaceContainer.listen(
+          peopleListProvider(''),
+          (_, _) {},
+        );
+        addTearDown(sub.close);
+        await workspaceContainer.read(peopleListProvider('').future);
+        expect(
+          workspaceContainer
+              .read(peopleListProvider(''))
+              .value!
+              .members
+              .map((m) => m.id),
+          ['org-a-m1'],
+        );
+
+        repository.hold('org-a', 2);
+        final pending = workspaceContainer
+            .read(peopleListProvider('').notifier)
+            .loadMore();
+
+        workspaceContainer
+            .read(_switchableOrgProvider.notifier)
+            .select('org-b');
+        await workspaceContainer.read(peopleListProvider('').future);
+        expect(
+          workspaceContainer
+              .read(peopleListProvider(''))
+              .value!
+              .members
+              .map((m) => m.id),
+          ['org-b-m1'],
+        );
+
+        repository.held['org-a/2']!.complete(
+          Success<MembersPage>(repository._page('org-a', 2)),
+        );
+        await pending;
+
+        expect(
+          workspaceContainer
+              .read(peopleListProvider(''))
+              .value!
+              .members
+              .map((m) => m.id),
+          ['org-b-m1'],
+        );
+      },
+    );
+
+    test(
+      'a failed load more from the previous workspace is dropped after a switch',
+      () async {
+        final repository = _HeldPagePeopleRepository();
+        final workspaceContainer = ProviderContainer(
+          overrides: [
+            currentOrgIdProvider.overrideWith(
+              (ref) => ref.watch(_switchableOrgProvider),
+            ),
+            peopleRepositoryProvider.overrideWithValue(repository),
+          ],
+        );
+        addTearDown(workspaceContainer.dispose);
+
+        final sub = workspaceContainer.listen(
+          peopleListProvider(''),
+          (_, _) {},
+        );
+        addTearDown(sub.close);
+        await workspaceContainer.read(peopleListProvider('').future);
+
+        repository.hold('org-a', 2);
+        final pending = workspaceContainer
+            .read(peopleListProvider('').notifier)
+            .loadMore();
+
+        workspaceContainer
+            .read(_switchableOrgProvider.notifier)
+            .select('org-b');
+        await workspaceContainer.read(peopleListProvider('').future);
+
+        repository.held['org-a/2']!.complete(
+          const Failure<MembersPage>(ApiFailure(message: 'offline')),
+        );
+        await pending;
+
+        final list = workspaceContainer.read(peopleListProvider('')).value!;
+        expect(list.members.map((m) => m.id), ['org-b-m1']);
+        expect(list.loadMoreFailed, isFalse);
+      },
+    );
   });
 
   group('PeopleActionsNotifier.openChat', () {

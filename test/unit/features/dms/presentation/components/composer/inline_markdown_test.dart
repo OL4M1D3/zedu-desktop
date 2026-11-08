@@ -138,6 +138,51 @@ void main() {
       expect(buildInlineMarkdownSpan('', _base).toPlainText(), '');
     });
 
+    test('named link passes label, url and nested label spans to the hook', () {
+      final calls = <(String, String, String)>[];
+      final span = buildInlineMarkdownSpan(
+        'see [the **docs**](https://zedu.chat/docs) now',
+        _base,
+        link: (label, url, style, children) {
+          final text = children.map((c) => c.toPlainText()).join();
+          calls.add((label, url, text));
+          return TextSpan(style: style, children: children);
+        },
+      );
+
+      expect(_visibleText(span), 'see the docs now');
+      expect(calls.single.$1, 'the **docs**');
+      expect(calls.single.$2, 'https://zedu.chat/docs');
+      expect(calls.single.$3, 'the docs');
+      final bold = _visible(span).firstWhere((r) => r.$1 == 'docs');
+      expect(_isBold(bold.$2), isTrue);
+    });
+
+    test('named link without a hook renders its raw text', () {
+      const text = '[the docs](https://zedu.chat/docs)';
+      expect(_visibleText(buildInlineMarkdownSpan(text, _base)), text);
+    });
+
+    test('named link keepMarkers hides the syntax but keeps the raw text', () {
+      const text = 'see [the docs](https://zedu.chat/docs) now';
+      final span = buildInlineMarkdownSpan(text, _base, keepMarkers: true);
+
+      expect(span.toPlainText(), text);
+      expect(_visibleText(span), 'see the docs now');
+    });
+
+    test('link-shaped text inside code stays literal', () {
+      const text = '`[x](https://zedu.chat)`';
+      final span = buildInlineMarkdownSpan(
+        text,
+        _base,
+        link: (label, url, style, children) =>
+            TextSpan(style: style, children: children),
+      );
+
+      expect(_visibleText(span), '[x](https://zedu.chat)');
+    });
+
     test('long text with many markers stays fast', () {
       final text = List.filled(2000, '***word*** *a* **b** ').join();
       final watch = Stopwatch()..start();

@@ -31,7 +31,7 @@ Future<void> showProfileConfirmDialog(
           expand: false,
           height: 40,
           style: ElevatedButton.styleFrom(
-            backgroundColor: destructive ? const Color(0xFFEF4444) : null,
+            backgroundColor: destructive ? context.colors.error : null,
           ),
           onPressed: () => Navigator.pop(context, true),
         ),
@@ -110,7 +110,7 @@ Future<void> showEditAccountDialog(
                 account.copyWith(
                   name: nameCtrl.text.trim(),
                   email: emailCtrl.text.trim(),
-                  timezone: timezoneCtrl.text.trim(),
+                  timezone: normalizeProfileTimezone(timezoneCtrl.text.trim()),
                 ),
               );
               Navigator.pop(ctx);

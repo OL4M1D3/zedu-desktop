@@ -14,7 +14,7 @@ class ErrorUserProfileNotifier extends UserProfileNotifier {
   UserProfileState build() => const UserProfileState();
 
   @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
+  Future<List<TeamMember>> fetchOrganisationMembers() async => [];
 
   @override
   Future<void> inviteMember({
@@ -26,7 +26,10 @@ class ErrorUserProfileNotifier extends UserProfileNotifier {
   }
 }
 
-// Avoids the locator and API: no users to suggest, invites are recorded.
+// The members the fake organisation has; anyone else is not in it.
+List<TeamMember> orgMembers = [];
+
+// Avoids the locator and API: serves [orgMembers], invites are recorded.
 class FakeUserProfileNotifier extends UserProfileNotifier {
   final List<String> invited = [];
 
@@ -34,7 +37,7 @@ class FakeUserProfileNotifier extends UserProfileNotifier {
   UserProfileState build() => const UserProfileState();
 
   @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
+  Future<List<TeamMember>> fetchOrganisationMembers() async => orgMembers;
 
   @override
   Future<void> inviteMember({
@@ -55,9 +58,6 @@ class PartlyFailingUserProfileNotifier extends UserProfileNotifier {
 
   @override
   UserProfileState build() => const UserProfileState();
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchRegisteredUsers() async => [];
 
   @override
   Future<void> inviteMember({
@@ -142,6 +142,20 @@ Future<void> openModal(WidgetTester tester) async {
 }
 
 void main() {
+  // The widgets reach the auth and workspace providers, which read AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
+  setUp(() => orgMembers = []);
+
   for (final entry in {
     1: 'Successfully invited 1 teammate.',
     2: 'Successfully invited 2 teammates.',
@@ -235,6 +249,56 @@ void main() {
 
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.decoration?.hintText, 'Enter name or email');
+  });
+
+  group('InviteTeammatesModal suggestions', () {
+    TeamMember member(String id, String email, String? name) => TeamMember(
+      id: id,
+      email: email,
+      role: 'User',
+      dateJoined: '',
+      status: TeamMemberStatus.active,
+      name: name,
+    );
+
+    testWidgets('suggest organisation members by their name', (tester) async {
+      orgMembers = [
+        member('u1', 'alice@zedu.chat', 'Alice Ade'),
+        member('u2', 'carol@zedu.chat', null),
+      ];
+      await tester.pumpWidget(
+        buildModalUnderTest(
+          () async => const AddEveryoneNobodyToAdd('general'),
+        ),
+      );
+      await openModal(tester);
+
+      await tester.enterText(find.byType(TextField), 'zedu');
+      await tester.pump();
+
+      expect(find.text('Alice Ade'), findsOneWidget);
+      expect(find.text('alice@zedu.chat'), findsOneWidget);
+      // No profile name: falls back to the email name, never "Unknown".
+      expect(find.text('carol'), findsOneWidget);
+      expect(find.text('Unknown'), findsNothing);
+    });
+
+    testWidgets('never suggest someone outside the organisation', (
+      tester,
+    ) async {
+      orgMembers = [member('u1', 'alice@zedu.chat', 'Alice Ade')];
+      await tester.pumpWidget(
+        buildModalUnderTest(
+          () async => const AddEveryoneNobodyToAdd('general'),
+        ),
+      );
+      await openModal(tester);
+
+      await tester.enterText(find.byType(TextField), 'desk4');
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsNothing);
+    });
   });
 
   group('InviteTeammatesModal "Add everyone"', () {

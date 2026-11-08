@@ -61,4 +61,50 @@ void main() {
     final image = tester.widget<Image>(find.byType(Image));
     expect((image.image as NetworkImage).url, 'https://cdn.example.com/a.png');
   });
+
+  testWidgets('preserves whole flag emoji in avatar initials (#2782)', (
+    tester,
+  ) async {
+    final user = User(
+      id: 'user-2',
+      firstName: '🇳🇬',
+      lastName: 'Nigeria',
+      email: 'nigeria@example.com',
+      phone: '',
+      username: 'nigeria',
+      isVerified: true,
+      isOnboarded: true,
+      createdAt: DateTime.utc(2026, 11, 4),
+      currentOrg: 'org-1',
+      currentOrganisationSlug: 'zedu',
+      avatarUrl: '',
+      defaultAvatarUrl: '',
+    );
+
+    await _pumpDialog(tester, user);
+    expect(find.text('🇳🇬N'), findsOneWidget);
+  });
+
+  testWidgets('preserves ZWJ composite emoji in avatar initials (#2782)', (
+    tester,
+  ) async {
+    final user = User(
+      id: 'user-3',
+      firstName: '👨‍💻',
+      lastName: 'Coder',
+      email: 'coder@example.com',
+      phone: '',
+      username: 'coder',
+      isVerified: true,
+      isOnboarded: true,
+      createdAt: DateTime.utc(2026, 11, 4),
+      currentOrg: 'org-1',
+      currentOrganisationSlug: 'zedu',
+      avatarUrl: '',
+      defaultAvatarUrl: '',
+    );
+
+    await _pumpDialog(tester, user);
+    expect(find.text('👨‍💻C'), findsOneWidget);
+  });
 }

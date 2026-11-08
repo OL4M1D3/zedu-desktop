@@ -3,6 +3,11 @@ import 'package:zedu/features/features.dart';
 
 import '../../../../../helpers/helpers.dart';
 
+class _FakeAuthNotifier extends AuthNotifier {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.unauthenticated);
+}
+
 class _FakeProfileNotifier extends UserProfileNotifier {
   @override
   UserProfileState build() => const UserProfileState(
@@ -28,6 +33,18 @@ class _FakeProfileNotifier extends UserProfileNotifier {
 }
 
 void main() {
+  // The view reaches the workspace provider, which reads AppConfig.
+  setUp(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+    locator.registerSingleton<AppConfig>(
+      const AppConfig(apiBaseUrl: 'http://test', usesMockData: false),
+    );
+  });
+
+  tearDown(() {
+    if (locator.isRegistered<AppConfig>()) locator.unregister<AppConfig>();
+  });
+
   const hint = 'Select at least 2 members to start a group DM (Selected: 0/2)';
 
   Future<void> pump(WidgetTester tester) async {
@@ -39,6 +56,8 @@ void main() {
       ProviderScope(
         overrides: [
           userProfileNotifierProvider.overrideWith(_FakeProfileNotifier.new),
+          // The view reads the signed-in user to leave them out.
+          authNotifierProvider.overrideWith(_FakeAuthNotifier.new),
         ],
         child: buildTestMaterialApp(const Scaffold(body: NewGroupChatView())),
       ),
