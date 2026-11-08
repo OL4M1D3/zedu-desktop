@@ -46,6 +46,24 @@ void main() {
       expect(labels, ['design', 'web-design']);
     });
 
+    test('hides actions until something is typed', () {
+      final all = [...entries, ...quickSwitcherActions];
+
+      expect(filterQuickSwitcherEntries(all, ''), entries);
+      expect(filterQuickSwitcherEntries(all, 'open').map((e) => e.label), [
+        'Open Settings',
+      ]);
+    });
+
+    test('matches actions by name too', () {
+      final labels = filterQuickSwitcherEntries([
+        ...entries,
+        ...quickSwitcherActions,
+      ], 'sett').map((e) => e.label);
+
+      expect(labels, ['Open Settings']);
+    });
+
     test('matches channels and DMs when query has leading # or @', () {
       final channelLabels = filterQuickSwitcherEntries(
         entries,
@@ -151,6 +169,30 @@ void main() {
       await tester.pump();
 
       expect(selected.single.conversation?.username, 'Gideon');
+    });
+
+    testWidgets('typing finds an action and Enter reports it', (tester) async {
+      final selected = <QuickSwitcherEntry>[];
+      await tester.pumpWidget(
+        buildTestMaterialApp(
+          Scaffold(
+            body: QuickSwitcherDialog(
+              entries: [...entries, ...quickSwitcherActions],
+              onSelected: selected.add,
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), 'sett');
+      await tester.pump();
+      expect(find.text('Open Settings'), findsOneWidget);
+      expect(find.text('general'), findsNothing);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(selected.single.action, QuickSwitcherAction.openSettings);
     });
 
     group('with more rows than fit', () {

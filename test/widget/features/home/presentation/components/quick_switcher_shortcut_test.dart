@@ -71,6 +71,10 @@ GoRouter _router({required bool withTextField}) => GoRouter(
       builder: (_, _) => const Scaffold(body: Text('home screen')),
     ),
     GoRoute(
+      path: AppRouter.profile,
+      builder: (_, _) => const Scaffold(body: Text('profile screen')),
+    ),
+    GoRoute(
       path: '/settings',
       builder: (_, _) => Scaffold(
         body: withTextField
@@ -295,6 +299,35 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byType(SingleChildScrollView), findsOneWidget);
+    });
+  });
+
+  group('Quick switcher actions', () {
+    testWidgets('Open Settings goes to the settings page', (tester) async {
+      await _pump(tester, withTextField: false);
+
+      await _pressCtrlK(tester);
+      await tester.enterText(find.byType(TextField), 'open settings');
+      await tester.pump();
+      await tester.tap(find.text('Open Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('profile screen'), findsOneWidget);
+    });
+
+    testWidgets('Show keyboard shortcuts opens the shortcuts list', (
+      tester,
+    ) async {
+      await _pump(tester, withTextField: false);
+
+      await _pressCtrlK(tester);
+      await tester.enterText(find.byType(TextField), 'shortcuts');
+      await tester.pump();
+      await tester.tap(find.text('Show keyboard shortcuts'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Keyboard shortcuts'), findsOneWidget);
+      expect(find.text('Bold'), findsOneWidget);
     });
   });
 

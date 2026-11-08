@@ -1,27 +1,51 @@
 import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
-/// One row in the quick switcher: a channel or a direct conversation.
+/// Something the quick switcher can do besides open a channel or a DM.
+enum QuickSwitcherAction { openSettings, showShortcuts }
+
+/// The actions the quick switcher offers, listed after the channels and DMs.
+const quickSwitcherActions = [
+  QuickSwitcherEntry.command('Open Settings', QuickSwitcherAction.openSettings),
+  QuickSwitcherEntry.command(
+    'Show keyboard shortcuts',
+    QuickSwitcherAction.showShortcuts,
+  ),
+];
+
+/// One row in the quick switcher: a channel, a direct conversation or an
+/// action.
 class QuickSwitcherEntry {
   final String label;
   final DmConversation? conversation;
+
+  /// What to do when this row is picked. Null for a channel or a DM.
+  final QuickSwitcherAction? action;
 
   /// The channel's id, so two channels whose names differ only in case open
   /// the right one. Null for a DM.
   final String? channelId;
 
   const QuickSwitcherEntry.channel(this.label, {this.channelId})
-    : conversation = null;
+    : conversation = null,
+      action = null;
 
   QuickSwitcherEntry.dm(DmConversation this.conversation)
     : label = conversation.displayName,
+      channelId = null,
+      action = null;
+
+  const QuickSwitcherEntry.command(this.label, QuickSwitcherAction this.action)
+    : conversation = null,
       channelId = null;
 
-  bool get isChannel => conversation == null;
+  bool get isChannel => conversation == null && action == null;
 }
 
 /// Entries whose name contains [query], names that start with it first.
-/// An empty query keeps every entry in its original order.
+/// An empty query keeps every channel and DM in its original order. Actions
+/// only appear once something is typed, so Enter on a freshly opened switcher
+/// never runs one by accident.
 List<QuickSwitcherEntry> filterQuickSwitcherEntries(
   List<QuickSwitcherEntry> entries,
   String query,
@@ -30,7 +54,9 @@ List<QuickSwitcherEntry> filterQuickSwitcherEntries(
   if (needle.startsWith("#") || needle.startsWith("@")) {
     needle = needle.substring(1).trim();
   }
-  if (needle.isEmpty) return entries;
+  if (needle.isEmpty) {
+    return entries.where((entry) => entry.action == null).toList();
+  }
 
   final starts = <QuickSwitcherEntry>[];
   final contains = <QuickSwitcherEntry>[];
@@ -45,8 +71,8 @@ List<QuickSwitcherEntry> filterQuickSwitcherEntries(
   return [...starts, ...contains];
 }
 
-/// Search box that jumps to a channel or DM. Arrow keys move the highlight,
-/// Enter opens it, Esc closes the dialog.
+/// Search box that jumps to a channel or DM, or runs an action. Arrow keys
+/// move the highlight, Enter opens it, Esc closes the dialog.
 class QuickSwitcherDialog extends StatefulWidget {
   final List<QuickSwitcherEntry> entries;
   final ValueChanged<QuickSwitcherEntry> onSelected;
@@ -67,7 +93,10 @@ class QuickSwitcherDialog extends StatefulWidget {
 
 class _QuickSwitcherDialogState extends State<QuickSwitcherDialog> {
   final TextEditingController _controller = TextEditingController();
-  late List<QuickSwitcherEntry> _results = widget.entries;
+  late List<QuickSwitcherEntry> _results = filterQuickSwitcherEntries(
+    widget.entries,
+    '',
+  );
   int _highlighted = 0;
   final ScrollController _scrollController = ScrollController();
 
@@ -92,7 +121,8 @@ class _QuickSwitcherDialogState extends State<QuickSwitcherDialog> {
         : _results.indexWhere(
             (entry) =>
                 entry.label == highlighted.label &&
-                entry.isChannel == highlighted.isChannel,
+                entry.isChannel == highlighted.isChannel &&
+                entry.action == highlighted.action,
           );
     _highlighted = kept < 0 ? 0 : kept;
   }
@@ -166,7 +196,7 @@ class _QuickSwitcherDialogState extends State<QuickSwitcherDialog> {
                   onSubmitted: (_) => _selectHighlighted(),
                   style: TextStyle(color: colors.textPrimary, fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: 'Jump to a channel or conversation',
+                    hintText: 'Jump to a channel, conversation or action',
                     hintStyle: TextStyle(color: colors.textHint),
                     prefixIcon: Icon(Icons.search, color: colors.textHint),
                     border: InputBorder.none,
@@ -224,6 +254,11 @@ class _QuickSwitcherRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final icon = switch (entry.action) {
+      QuickSwitcherAction.openSettings => Icons.settings_outlined,
+      QuickSwitcherAction.showShortcuts => Icons.keyboard_outlined,
+      null => entry.isChannel ? Icons.tag : Icons.person_outline,
+    };
 
     return InkWell(
       onTap: onTap,
@@ -232,11 +267,7 @@ class _QuickSwitcherRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            Icon(
-              entry.isChannel ? Icons.tag : Icons.person_outline,
-              size: 18,
-              color: colors.textSecondary,
-            ),
+            Icon(icon, size: 18, color: colors.textSecondary),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
